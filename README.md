@@ -83,10 +83,11 @@ The panel sleeps from 22:00 to 08:00 by default. Change the times or switch it o
 ### Trying the settings page without a panel
 
 ```bash
+./build.sh                       # once: fetches Patternflow, whose console chrome the page uses
 python3 tools/mock_panel.py      # then open http://localhost:8765/dashboard
 ```
 
-This serves the real page from the firmware source and pretends to be a panel. Uploaded clips land in `.mock_panel/`.
+This serves the real page (`feature/dashboard/dashboard.html`) with Patternflow's console chrome and pretends to be a panel. The page is built from Patternflow's own console pages; `build.sh` stamps and gzips it with Patternflow's `console_pages.py`. Uploaded clips land in `.mock_panel/`.
 
 <details><summary>Landscape layouts</summary>
 
