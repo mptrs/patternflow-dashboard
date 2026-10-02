@@ -40,6 +40,7 @@ constexpr int HISTORY = 1024;
 // The world must show only earlier states this many generations in a row
 // before it counts as finished (an accidental hash match resets the count).
 constexpr int STALE_GENS = 40;
+constexpr float SHOW_END_SECONDS = 8.0f;  // a finished world stays on screen this long
 constexpr int MAX_AGE = 60;          // color keeps shifting up to this age
 constexpr float FADE_SECONDS = 1.2f; // dissolve / grow between worlds
 
@@ -62,7 +63,7 @@ static const uint8_t PALETTE[THEMES][6][3] = {
 };
 
 // Knob parameters
-static float speed = 8.0f;     // generations per second
+static float speed = 4.0f;     // generations per second
 static float density = 0.33f;  // chance a cell starts alive
 static int theme = 0;
 static float trail = 0.75f;    // how much of the trail survives each generation
@@ -83,6 +84,7 @@ static float pending = 0.0f;   // generations owed (fractional): also the fade-i
 static float fade = 1.0f;      // whole-world brightness during a world change
 static int fadeDir = 0;        // -1 dissolving, +1 growing, 0 steady
 static bool paused = false;
+static float finishedFor = -1.0f;  // seconds since the world finished, -1 = still alive
 
 static void buildLut() {
   const uint8_t(*p)[3] = PALETTE[theme];
@@ -120,8 +122,8 @@ static void seedWorld() {
     for (int y = 0; y < H; y++)
       for (int x = 0; x < W; x++)
         if (random(1000) < limit) setCell(x, y);
-  } else if (seedStyle == 1) {  // mirrored soup in the middle: grows like a kaleidoscope
-    const int hw = W / 4, hh = H / 4;
+  } else if (seedStyle == 1) {  // mirrored soup over the whole world: grows like a kaleidoscope
+    const int hw = W / 2, hh = H / 2;
     for (int y = 0; y < hh; y++)
       for (int x = 0; x < hw; x++)
         if (random(1000) < limit) {
@@ -130,6 +132,16 @@ static void seedWorld() {
           setCell(W / 2 - 1 - x, H / 2 + y);
           setCell(W / 2 + x, H / 2 + y);
         }
+  } else if (rule != 0) {  // methuselahs only work under Life: use a few dense blobs instead
+    // Day & Night needs bigger, denser blobs than HighLife to get going
+    const int r = rule == 2 ? 16 : 8, fill = rule == 2 ? 500 : limit + 150;
+    const int count = 2 + random(3);
+    for (int k = 0; k < count; k++) {
+      const int ox = random(W), oy = random(H);
+      for (int dy = -r; dy <= r; dy++)
+        for (int dx = -r; dx <= r; dx++)
+          if (dx * dx + dy * dy <= r * r && random(1000) < fill) setCell(ox + dx, oy + dy);
+    }
   } else {  // a few methuselahs: tiny seeds that grow for hundreds of generations
     static const int8_t R_PENTOMINO[][2] = {{1, 0}, {2, 0}, {0, 1}, {1, 1}, {1, 2}};
     static const int8_t ACORN[][2] = {{1, 0}, {3, 1}, {0, 2}, {1, 2}, {4, 2}, {5, 2}, {6, 2}};
@@ -147,6 +159,7 @@ static void seedWorld() {
   histIndex = 0;
   stale = 0;
   pending = 0.0f;
+  finishedFor = -1.0f;
 }
 
 // Start a world change: dissolve the current world, then grow the next one.
@@ -166,6 +179,7 @@ static void sprinkle() {
         }
       }
   stale = 0;
+  finishedFor = -1.0f;
 }
 
 static void step() {
@@ -221,7 +235,7 @@ static void step() {
     history[histIndex] = h;
     histIndex = (histIndex + 1) % HISTORY;
   }
-  if (stale > STALE_GENS) changeWorld();
+  if (stale > STALE_GENS && finishedFor < 0.0f) finishedFor = 0.0f;  // finished: show it a while
 }
 
 void setup() {
@@ -255,8 +269,15 @@ void update(float dt, const InputFrame& input) {
   if (input.btnPressed[2]) {
     rule = (rule + 1) % RULE_COUNT;
     stale = 0;
+    finishedFor = -1.0f;  // a new rule brings a finished world back to life
   }
   if (input.btnPressed[3]) sprinkle();
+
+  // A finished world stays on screen for SHOW_END_SECONDS, then makes way
+  if (finishedFor >= 0.0f && !paused) {
+    finishedFor += dt;
+    if (finishedFor >= SHOW_END_SECONDS) changeWorld();
+  }
 
   // World change: dissolve, reseed, grow
   if (fadeDir != 0) {

@@ -13,7 +13,7 @@
 // Knob 4: trail length                    · click: sprinkle live cells
 
 const W = 128, H = 64, N = W * H;
-const HISTORY = 1024, STALE_GENS = 40, MAX_AGE = 60, FADE_SECONDS = 1.2;
+const HISTORY = 1024, STALE_GENS = 40, MAX_AGE = 60, FADE_SECONDS = 1.2, SHOW_END_SECONDS = 8;
 const bits = (...ns) => ns.reduce((m, n) => m | (1 << n), 0);
 const RULES = [
   { born: bits(3), survive: bits(2, 3) },                       // Life      B3/S23
@@ -56,10 +56,18 @@ function seedWorld(p) {
   p.cur.fill(0); p.age.fill(0); p.ghost.fill(0);
   if (p.seedStyle === 0) {                    // random soup
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (Math.random() < p.density) setCell(p, x, y);
-  } else if (p.seedStyle === 1) {             // mirrored soup in the middle
-    for (let y = 0; y < H / 4; y++) for (let x = 0; x < W / 4; x++) if (Math.random() < p.density) {
+  } else if (p.seedStyle === 1) {             // mirrored soup over the whole world
+    for (let y = 0; y < H / 2; y++) for (let x = 0; x < W / 2; x++) if (Math.random() < p.density) {
       setCell(p, W / 2 - 1 - x, H / 2 - 1 - y); setCell(p, W / 2 + x, H / 2 - 1 - y);
       setCell(p, W / 2 - 1 - x, H / 2 + y);     setCell(p, W / 2 + x, H / 2 + y);
+    }
+  } else if (p.rule !== 0) {                  // methuselahs only work under Life: dense blobs instead
+    const r = p.rule === 2 ? 16 : 8, fill = p.rule === 2 ? 0.5 : p.density + 0.15;
+    const count = 2 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < count; k++) {
+      const ox = Math.floor(Math.random() * W), oy = Math.floor(Math.random() * H);
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++)
+        if (dx * dx + dy * dy <= r * r && Math.random() < fill) setCell(p, ox + dx, oy + dy);
     }
   } else {                                    // a few methuselahs
     const count = 1 + Math.floor(Math.random() * 3);
@@ -68,7 +76,7 @@ function seedWorld(p) {
       for (const [x, y] of Math.random() < 0.5 ? R_PENTOMINO : ACORN) setCell(p, ox + x, oy + y);
     }
   }
-  p.history.fill(0); p.histIndex = 0; p.stale = 0; p.pending = 0;
+  p.history.fill(0); p.histIndex = 0; p.stale = 0; p.pending = 0; p.finishedFor = -1;
 }
 
 function changeWorld(p) { if (p.fadeDir === 0) p.fadeDir = -1; }
@@ -81,7 +89,7 @@ function sprinkle(p) {
       if (!p.cur[i]) { p.cur[i] = 1; p.age[i] = 1; }
     }
   }
-  p.stale = 0;
+  p.stale = 0; p.finishedFor = -1;
 }
 
 function step(p) {
@@ -106,11 +114,11 @@ function step(p) {
   const h = fingerprint(p);
   if (p.history.includes(h)) p.stale++;
   else { p.stale = 0; p.history[p.histIndex] = h; p.histIndex = (p.histIndex + 1) % HISTORY; }
-  if (p.stale > STALE_GENS) changeWorld(p);
+  if (p.stale > STALE_GENS && p.finishedFor < 0) p.finishedFor = 0;  // finished: show it a while
 }
 
 export function setup(params) {
-  Object.assign(params, { speed: 8, density: 0.33, theme: 0, trail: 0.75, rule: 0, seedStyle: 0,
+  Object.assign(params, { speed: 4, density: 0.33, theme: 0, trail: 0.75, rule: 0, seedStyle: 0,
     histIndex: 0, stale: 0, pending: 0, paused: false, fade: 0, fadeDir: 1, lutTheme: -1 });
   params.cur = new Uint8Array(N); params.nxt = new Uint8Array(N);
   params.age = new Uint8Array(N); params.ghost = new Uint8Array(N);
@@ -129,8 +137,12 @@ export function update(dt, input, params) {
   if (input && input.btnPressed) {
     if (input.btnPressed[0]) p.paused = !p.paused;
     if (input.btnPressed[1]) { p.seedStyle = (p.seedStyle + 1) % 3; changeWorld(p); }
-    if (input.btnPressed[2]) { p.rule = (p.rule + 1) % RULES.length; p.stale = 0; }
+    if (input.btnPressed[2]) { p.rule = (p.rule + 1) % RULES.length; p.stale = 0; p.finishedFor = -1; }
     if (input.btnPressed[3]) sprinkle(p);
+  }
+  if (p.finishedFor >= 0 && !p.paused) {
+    p.finishedFor += dt;
+    if (p.finishedFor >= SHOW_END_SECONDS) changeWorld(p);
   }
   if (p.fadeDir !== 0) {
     p.fade += p.fadeDir * dt / FADE_SECONDS;

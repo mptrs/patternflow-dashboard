@@ -26,7 +26,7 @@ Switching between this edition and the official one keeps your patterns, Wi-Fi n
 
 The long presses stay Patternflow's own (K4 held = pattern browser).
 
-Cells fade in when they are born, shift color as they age and leave a trail when they die. The world wraps around at the edges. It runs until it is truly finished: once the whole grid repeats an earlier state, nothing new can ever happen. That covers still lifes, blinkers, and gliders that loop around forever. The end state stays visible for 40 generations, then the world dissolves and a new one grows.
+Cells fade in when they are born, shift color as they age and leave a trail when they die. The world wraps around at the edges. It runs until it is truly finished: once the whole grid repeats an earlier state, nothing new can ever happen. That covers still lifes, blinkers, and gliders that loop around forever. The end state stays visible for 8 seconds, then the world dissolves and a new one grows. At the default speed (4 generations per second) a classic random world lasts about 6 minutes on average, sometimes over 20.
 
 **Try it without hardware:** paste [`patterns/game-of-life/game-of-life.js`](patterns/game-of-life/game-of-life.js) into the [Patternflow Live Editor](https://patternflow.work/pattern).
 
