@@ -46,7 +46,8 @@ label{display:inline-flex;gap:.4rem;align-items:center;margin:.3rem 1rem .3rem 0
 <ul id="gifs"></ul>
 <p><input type="file" id="file" accept="image/gif"></p>
 <p><label>Fit <select id="fit"><option value="contain">whole GIF, black bars</option><option value="cover">fill, crop</option></select></label>
-<label><input type="checkbox" id="sharp" checked> Sharp (pixel art)</label></p>
+<label><input type="checkbox" id="sharp" checked> Sharp (pixel art)</label>
+<label><input type="checkbox" id="split"> Split wide GIFs in portrait: left half on top, right half below</label></p>
 <p><label>Name <input id="name" maxlength="24" placeholder="e.g. nyan-cat"></label></p>
 <div><canvas id="pp" width="64" height="128" style="width:96px;height:192px"></canvas><canvas id="pl" width="128" height="64" style="width:192px;height:96px"></canvas></div>
 <p><button id="up" disabled>Upload</button> <span id="gmsg" class="muted"></span></p>
@@ -110,12 +111,17 @@ function decodeGif(buf){const b=new Uint8Array(buf);if(b[0]!==71||b[1]!==73||b[2
 
 // ---- convert to clips: scale to 64x128 and 128x64, map to the 6x7x6 palette
 const G7=[0,43,85,128,170,213,255];
-function convert(gif,tw,th,fit,sharp){let fr=gif.frames;const step=Math.ceil(fr.length/120);
- const src=document.createElement('canvas');src.width=gif.W;src.height=gif.H;const sc=src.getContext('2d');
+function convert(gif,tw,th,fit,sharp,split){let fr=gif.frames;const step=Math.ceil(fr.length/120);
+ // split: a wide GIF becomes its left half above its right half (half as wide, twice as tall)
+ const half=Math.floor(gif.W/2),SW=split?half:gif.W,SH=split?gif.H*2:gif.H;
+ const raw=document.createElement('canvas');raw.width=gif.W;raw.height=gif.H;const rc=raw.getContext('2d');
+ const src=document.createElement('canvas');src.width=SW;src.height=SH;const sc=src.getContext('2d');
  const dst=document.createElement('canvas');dst.width=tw;dst.height=th;const dc=dst.getContext('2d');dc.imageSmoothingEnabled=!sharp;
- const s=fit==='cover'?Math.max(tw/gif.W,th/gif.H):Math.min(tw/gif.W,th/gif.H),dw=gif.W*s,dh=gif.H*s;
+ const s=fit==='cover'?Math.max(tw/SW,th/SH):Math.min(tw/SW,th/SH),dw=SW*s,dh=SH*s;
  const out=[];for(let i=0;i<fr.length;i+=step){let delay=0;for(let k=i;k<Math.min(i+step,fr.length);k++)delay+=fr[k].delay;
-  sc.putImageData(new ImageData(fr[i].rgba,gif.W,gif.H),0,0);dc.fillStyle='#000';dc.fillRect(0,0,tw,th);dc.drawImage(src,(tw-dw)/2,(th-dh)/2,dw,dh);
+  rc.putImageData(new ImageData(fr[i].rgba,gif.W,gif.H),0,0);sc.clearRect(0,0,SW,SH);
+  if(split){sc.drawImage(raw,0,0,half,gif.H,0,0,half,gif.H);sc.drawImage(raw,half,0,half,gif.H,0,gif.H,half,gif.H);}else sc.drawImage(raw,0,0);
+  dc.fillStyle='#000';dc.fillRect(0,0,tw,th);dc.drawImage(src,(tw-dw)/2,(th-dh)/2,dw,dh);
   const px=dc.getImageData(0,0,tw,th).data,ix=new Uint8Array(tw*th);
   for(let j=0;j<tw*th;j++){const r=px[j*4],g=px[j*4+1],b=px[j*4+2];ix[j]=Math.round(r/51)*42+Math.round(g/42.5)*6+Math.round(b/51);}
   out.push({ix,delay:Math.min(65535,delay)});}
@@ -124,7 +130,7 @@ function clipBytes(c){const n=c.frames.length,buf=new Uint8Array(12+2*n+n*c.w*c.
  buf.set([68,71,70,49]);dv.setUint16(4,c.w,true);dv.setUint16(6,c.h,true);dv.setUint16(8,n,true);
  c.frames.forEach((f,i)=>{dv.setUint16(12+2*i,f.delay,true);buf.set(f.ix,12+2*n+i*c.w*c.h);});return buf;}
 let gif=null,clips=null,anim=null;
-function preview(){if(!gif)return;clips={p:convert(gif,64,128,$('fit').value,$('sharp').checked),l:convert(gif,128,64,$('fit').value,$('sharp').checked)};
+function preview(){if(!gif)return;clips={p:convert(gif,64,128,$('fit').value,$('sharp').checked,$('split').checked),l:convert(gif,128,64,$('fit').value,$('sharp').checked,false)};
  const kb=Math.round((clipBytes(clips.p).length+clipBytes(clips.l).length)/1024);
  $('gmsg').textContent=`${clips.p.frames.length} frames, ${kb} KB`;$('up').disabled=false;
  clearTimeout(anim);let i=0;const tick=()=>{for(const[k,c]of[['pp',clips.p],['pl',clips.l]]){const f=c.frames[i%c.frames.length],img=new ImageData(c.w,c.h);
@@ -133,8 +139,8 @@ function preview(){if(!gif)return;clips={p:convert(gif,64,128,$('fit').value,$('
   anim=setTimeout(tick,clips.p.frames[i%clips.p.frames.length].delay);i++;};tick();}
 $('file').onchange=async()=>{const f=$('file').files[0];if(!f)return;
  try{gif=decodeGif(await f.arrayBuffer());}catch(e){$('gmsg').textContent='Could not read this GIF.';return;}
- $('name').value=f.name.replace(/\.gif$/i,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);preview();};
-$('fit').onchange=preview;$('sharp').onchange=preview;
+ $('split').checked=gif.W>=1.6*gif.H;$('name').value=f.name.replace(/\.gif$/i,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);preview();};
+$('fit').onchange=preview;$('split').onchange=preview;$('sharp').onchange=preview;
 $('up').onclick=async()=>{const name=$('name').value;if(!/^[a-z0-9-]{1,24}$/.test(name)){$('gmsg').textContent='Name: a-z, 0-9 and - only.';return;}
  $('up').disabled=true;for(const o of['p','l']){$('gmsg').textContent=`Uploading ${o==='p'?'portrait':'landscape'}…`;
   const fd=new FormData();fd.append('clip',new Blob([clipBytes(clips[o])]),'clip.dgf');

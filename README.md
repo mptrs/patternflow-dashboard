@@ -51,7 +51,7 @@ The weather icons are drawn from shapes rather than bitmaps, so they stay sharp 
 
 ### GIFs
 
-Upload them on the same page, `http://patternflow.local/dashboard`. Pick a GIF and the browser does the work: it decodes it, shows a live preview in portrait and landscape, and converts it. You choose between *whole GIF* (black bars) or *fill* (cropped), and sharp (pixel art) or smooth scaling. The panel stores a portrait and a landscape version, in a 252-colour palette at one byte per pixel (8 KB per frame), and streams the frames from flash. GIFs with more than 120 frames are thinned out so the whole animation still fits. Delete them from the list on the same page.
+Upload them on the same page, `http://patternflow.local/dashboard`. Pick a GIF and the browser does the work: it decodes it, shows a live preview in portrait and landscape, and converts it. You choose between *whole GIF* (black bars) or *fill* (cropped), and sharp (pixel art) or smooth scaling. For wide GIFs (two characters side by side, say), *split* puts the left half above the right half in portrait, so they stay big. It is switched on automatically for GIFs at least 1.6 times as wide as they are tall. The panel stores a portrait and a landscape version, in a 252-colour palette at one byte per pixel (8 KB per frame), and streams the frames from flash. GIFs with more than 120 frames are thinned out so the whole animation still fits. Delete them from the list on the same page.
 
 ### Automatic rotation (optional accelerometer)
 
