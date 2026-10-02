@@ -48,6 +48,9 @@ done
 # 4. Build with PlatformIO (from our own virtualenv when there is one)
 PY=python3
 [ -x "$ROOT/.venv/bin/python" ] && PY="$ROOT/.venv/bin/python"
+
+# The settings page, stamped with Patternflow's console chrome and gzipped by its own tool
+"$PY" "$ROOT/tools/console_page.py" "$SKETCH" "$ROOT/feature/dashboard/dashboard.html" "$FEATURES/dashboard/dashboard_index.h"
 ( cd "$SKETCH" && PLATFORMIO_BUILD_DIR="$BUILD_DIR" "$PY" -m platformio run -e firmware )
 BIN="$BUILD_DIR/firmware/firmware.bin"
 
@@ -82,6 +85,8 @@ fi
 if [ "${1:-}" = "flash" ]; then
   DEV="${2:-patternflow.local}"
   echo "installing on $DEV ..."
-  curl -s --max-time 180 -F "firmware=@$OUT" "http://$DEV/update?size=$(wc -c < "$OUT" | tr -d ' ')"
+  # Patternflow only takes an update once it is armed on the device: hold K2 for NETWORK, turn K4 to UPDATE
+  curl -sS --max-time 240 -T "$OUT" "http://$DEV/update?size=$(wc -c < "$OUT" | tr -d ' ')" || {
+    echo "install failed: is $DEV reachable? Try the panel's IP address instead"; exit 1; }
   echo ""
 fi

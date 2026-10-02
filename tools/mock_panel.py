@@ -3,8 +3,9 @@
 
     python3 tools/mock_panel.py [port] [--accel]   then open http://localhost:8765/dashboard
 
-Serves the real page straight out of feature/dashboard/dash_http.h and imitates
-its API. Uploaded GIF clips land in .mock_panel/ (checked the same way the panel
+Serves the real page (feature/dashboard/dashboard.html, stamped the way the panel
+serves it) with Patternflow's console chrome, and imitates its API. Needs a build
+first (./build.sh), for the Patternflow checkout in .build/. Uploaded GIF clips land in .mock_panel/ (checked the same way the panel
 checks them), so they can be inspected or played back by a test.
 """
 import json
@@ -19,7 +20,18 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parent.parent
 STORE = ROOT / ".mock_panel"
 STORE.mkdir(exist_ok=True)
-PAGE = re.search(r'R"HTML\((.*?)\)HTML"', (ROOT / "feature/dashboard/dash_http.h").read_text(), re.S).group(1)
+SKETCH = ROOT / ".build/patternflow/firmware/patternflow"
+sys.path.insert(0, str(ROOT / "tools"))
+import console_page  # noqa: E402
+cp = console_page.tool(str(SKETCH))
+CHROME = cp.split(cp.read(str(SKETCH / "src/theme_index.h")), "pf-console.js", "JS")[1]
+STATUS = {"version": "3.10.5", "build": "mock", "variant": "dashboard", "variantVersion": "mock",
+          "caps": ["patterns", "params", "sleep", "dashboard"], "panel": "128x64", "wifi": True,
+          "featureNav": [["/dashboard", "Dashboard", "Location, night mode, rotation and GIFs."]]}
+
+
+def page():  # read on every request, so an edit shows on refresh
+    return console_page.stamped(str(SKETCH), (ROOT / "feature/dashboard/dashboard.html").read_text())
 state = {"place": "", "lat": 0.0, "lon": 0.0, "night": {"on": True, "start": 22 * 60, "end": 8 * 60},
          "clocks": "NEW YORK|-300,60,3.2.0/120,11.1.0/120|America/New_York\nLONDON|0,60,3.5.0/60,10.5.0/120|Europe/London\n"
                    "TOKYO|540,0|Asia/Tokyo\nSYDNEY|600,60,10.1.0/120,4.1.0/180|Australia/Sydney\n"}
@@ -43,7 +55,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         if url.path == "/dashboard":
-            return self.send(200, PAGE, "text/html; charset=utf-8")
+            return self.send(200, page(), "text/html; charset=utf-8")
+        if url.path == "/pf-console.js":
+            return self.send(200, CHROME, "application/javascript")
+        if url.path == "/api/status":
+            return self.send(200, json.dumps(STATUS))
         if url.path == "/api/dashboard":
             return self.send(200, json.dumps({**state, "updated": 0, "error": "", "free": 8 * 1048576, "gifs": clips()}))
         if url.path == "/api/dashboard/orientation":

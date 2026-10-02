@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8">
+<script src="/pf-console.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Patternflow - Dashboard</title>
+<!-- Built from Patternflow's own console pages (clock.html, weather.html,
+     patterns.html): same tokens, same parts, same chrome. build.sh stamps and
+     gzips it with Patternflow's console_pages.py. -->
+<style>
+:root{--cream:#0C0B09;--ink:#EDE7DB;--muted:#8A8272;--faint:#5A5546;
+--rule:#242118;--rule-soft:#1B1914;--led:#FF5C2E;--ok:#57B87F;--warn:#D9A03F;
+--panel:#131110;--lift:#1B1914;
+--sans:'Inter',ui-sans-serif,system-ui,sans-serif;
+--mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--sans);
+line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:960px;margin:0 auto;padding:28px 20px 64px}
+header{display:flex;align-items:center;gap:12px;padding-bottom:12px;
+border-bottom:1px solid var(--rule)}
+.dot{width:7px;height:7px;background:var(--led);border-radius:1px}
+h1{font-size:15px;font-weight:600;margin:0}
+.sub{font-family:var(--mono);font-size:11px;color:var(--faint);flex:1}
+h2{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+color:var(--muted);margin:0 0 10px}
+.cols{display:grid;grid-template-columns:352px minmax(0,1fr);gap:40px;align-items:start;margin-top:22px}
+.stage{position:sticky;top:16px;display:flex;flex-direction:column;gap:14px}
+.screen{display:flex;align-items:center;justify-content:center;gap:14px;height:300px;
+background:var(--panel);border:1px solid var(--rule);border-radius:2px}
+.screen .note{max-width:200px;text-align:center}
+.screen canvas{background:#000;box-shadow:0 0 0 1px var(--rule-soft);image-rendering:pixelated}
+section{margin-top:26px}
+.stage section,.controls section:first-child{margin-top:0}
+.chip{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:0 12px;
+border:1px solid var(--rule);border-radius:2px;background:var(--panel);color:var(--muted);
+font:inherit;font-size:12px;cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--faint);color:var(--ink)}
+.chip.on{border-color:var(--led);color:var(--ink);background:var(--lift)}
+.chip:disabled{opacity:.4;cursor:default;border-color:var(--rule);color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.segs{display:flex}
+.seg{display:inline-flex;align-items:center;height:34px;padding:0 12px;border:1px solid var(--rule);
+background:var(--panel);color:var(--muted);font:inherit;font-size:12px;cursor:pointer;margin-right:-1px;position:relative}
+.seg:first-child{border-radius:2px 0 0 2px}.seg:last-child{border-radius:0 2px 2px 0;margin-right:0}
+.seg:hover{color:var(--ink)}
+.seg.on{border-color:var(--led);color:var(--ink);background:var(--lift);z-index:1}
+.row{display:flex;align-items:center;gap:12px;min-height:34px;padding:3px 0}
+.row>label{flex:0 0 96px;font-size:13px;color:var(--muted)}
+select,input[type=text],input[type=time]{font:inherit;font-family:var(--mono);font-size:12px;padding:7px 9px;
+background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:2px;min-width:0;color-scheme:dark}
+select:focus,input[type=text]:focus,input[type=time]:focus{outline:none;border-color:var(--led)}
+.grow{flex:1}
+.go{font:inherit;font-size:12px;padding:6px 12px;border-radius:2px;cursor:pointer;
+border:1px solid var(--led);background:var(--led);color:var(--panel);font-weight:600}
+.go:disabled{opacity:.4;cursor:default}
+.switch{display:inline-flex;align-items:center;gap:10px;background:none;border:none;padding:0;cursor:pointer;
+font:inherit;font-size:13px;color:var(--muted);text-align:left}
+.switch i{flex:none;width:34px;height:20px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);position:relative;display:inline-block}
+.switch i::after{content:"";position:absolute;top:2px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--muted)}
+.switch.on i{border-color:var(--led);background:var(--led)}
+.switch.on i::after{left:17px;background:var(--cream)}
+.switch.big i{width:38px;height:22px}.switch.big i::after{top:3px}.switch.big.on i::after{left:19px}
+.note{font-size:12px;color:var(--faint);margin:8px 0 0;line-height:1.45}
+.msg,#msg{font-family:var(--mono);font-size:11px;color:var(--faint);min-height:16px}
+.msg.pf-ok,#msg.pf-ok{color:var(--ok)}.msg.pf-err,#msg.pf-err{color:var(--led)}
+ul{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule-soft)}
+li{display:flex;align-items:center;gap:10px;padding:7px 2px;
+border-bottom:1px solid var(--rule-soft);font-size:13px}
+li .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+li .t{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap}
+li.empty{color:var(--faint);font-size:12px}
+li input[type=text]{width:9.5em;text-transform:uppercase}
+ul.picks{border-top:none;margin-top:6px}
+ul.picks li{border-bottom:none;padding:2px 0}
+button.del{font:inherit;font-size:11px;color:var(--muted);background:none;
+border:1px solid var(--rule);border-radius:2px;padding:2px 8px;cursor:pointer;white-space:nowrap}
+button.del:hover{border-color:var(--led);color:var(--led)}
+.drop{display:block;border:1px dashed var(--rule);border-radius:3px;padding:22px 18px;text-align:center;
+background:rgba(255,255,255,.02);transition:border-color .15s,background .15s;cursor:pointer}
+.drop.over{border-color:var(--led);background:rgba(255,92,46,.06)}
+.drop p{margin:0;font-size:13px;color:var(--muted)}
+.drop b{color:var(--ink);font-weight:600}
+input[type=file]{display:none}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:10px}
+dl{margin:0;border-top:1px solid var(--rule-soft)}
+.drow{display:flex;align-items:baseline;gap:12px;padding:7px 2px;border-bottom:1px solid var(--rule-soft)}
+dt{flex:0 0 auto;font-size:13px;color:var(--muted);margin:0}
+dd{flex:1;margin:0;font-family:var(--mono);font-size:12px;text-align:right;overflow-wrap:anywhere}
+.ok{color:var(--ok)}.bad{color:var(--led)}
+html.pf-offline .stage dl,html.pf-offline #st{opacity:.45}
+footer{margin-top:32px;padding-top:12px;border-top:1px solid var(--rule);
+font-family:var(--mono);font-size:11px;color:var(--faint)}
+a{color:var(--muted)}
+[hidden]{display:none!important}
+html[data-theme=light]{--cream:#F4EFE6;--cream2:#FFFCFA;--bg:#F4EFE6;--panel:#FFFCFA;--lift:#EFE8DC;--ink:#1A1814;--muted:#6B6558;--faint:#9A9486;--ghost:#E0D9CC;--rule:#D9D1C2;--rule-soft:#E8E2D6;--led:#FF5C2E;--ok:#2F8A55;--warn:#B88120;--card:#FFFCFA;--fg:#1A1814}
+html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
+@media(max-width:760px){
+  .wrap{padding:16px 16px 48px}
+  /* Controls first; the preview then sits right under the GIF form */
+  .cols{display:flex;flex-direction:column;gap:26px;margin-top:16px}
+  .stage{position:static;order:2}
+  html:not(.has-gif) #pvsec{display:none}
+  .screen{height:auto;padding:14px}
+  .row{flex-wrap:wrap}.row>label{flex:0 0 72px}
+  .segs{flex-wrap:wrap}.seg{flex:1 1 auto;justify-content:center;height:40px}
+}
+</style></head><body><div class="wrap">
+<header><span class="dot"></span><h1>Dashboard</h1><span class="sub" id="st">-</span></header>
+
+<div class="cols">
+  <div class="stage">
+    <section id="pvsec">
+      <h2>GIF preview</h2>
+      <div class="screen"><p class="note" id="pv-empty">Choose a GIF below to see it here, as the panel will show it.</p><canvas hidden id="pp" width="64" height="128" style="width:128px;height:256px"></canvas><canvas hidden id="pl" width="128" height="64" style="width:160px;height:80px"></canvas></div>
+    </section>
+    <dl>
+      <div class="drow"><dt>Location</dt><dd id="d-loc">-</dd></div>
+      <div class="drow"><dt>Weather</dt><dd id="d-wx">-</dd></div>
+      <div class="drow"><dt>Showing</dt><dd id="d-or">-</dd></div>
+      <div class="drow"><dt>Accelerometer</dt><dd id="d-acc">-</dd></div>
+      <div class="drow"><dt>Storage free</dt><dd id="d-free">-</dd></div>
+    </dl>
+    <div id="msg" aria-live="polite"></div>
+  </div>
+
+  <div class="controls">
+    <section>
+      <h2>Location</h2>
+      <form class="row" id="f" autocomplete="off"><label for="q">City</label>
+        <input id="q" type="text" class="grow" placeholder="e.g. Utrecht" required><button class="go">Search</button></form>
+      <ul class="picks chips" id="r"></ul>
+      <p class="note">For the weather screens. Your browser looks the place up; the panel only keeps its coordinates. Weather comes from Open-Meteo every 15 minutes.</p>
+    </section>
+
+    <section>
+      <h2>World clocks</h2>
+      <ul id="clocks"></ul>
+      <form class="row" id="cf" autocomplete="off" style="margin-top:8px"><label for="cq">Add</label>
+        <input id="cq" type="text" class="grow" placeholder="a city, e.g. Tokyo"><button class="go" id="cgo">Search</button></form>
+      <ul class="picks chips" id="cr"></ul>
+      <div class="actions"><button type="button" class="go" id="csave" disabled>Save clocks</button><span class="msg" id="cmsg"></span></div>
+      <p class="note">Up to four. Names up to 10 characters. Daylight saving comes from your browser's time zone database; the panel then keeps time by itself. With no clocks the screen is skipped.</p>
+    </section>
+
+    <section>
+      <h2>Night mode</h2>
+      <div class="row"><button type="button" class="switch" id="non"><i></i><span>Sleep at night</span></button></div>
+      <div class="row"><label for="ns">From</label><input id="ns" type="time"><label for="ne" style="flex:0 0 auto;margin-left:12px">until</label><input id="ne" type="time"></div>
+      <p class="note">The whole panel sleeps between these times, whatever pattern is running. Any knob wakes it; at night it goes back to sleep after 10 minutes.</p>
+    </section>
+
+    <section>
+      <h2>Orientation</h2>
+      <div class="row"><button type="button" class="switch" id="oauto"><i></i><span>Turn with the panel (needs the accelerometer)</span></button></div>
+      <div class="row"><button type="button" class="switch" id="oflip"><i></i><span>Also turn Patternflow's patterns when the panel hangs upside down</span></button></div>
+      <h2 style="margin-top:16px">Calibrate</h2>
+      <div class="chips">
+        <button type="button" class="chip" id="oup">This is upright</button>
+        <button type="button" class="chip" id="ofp">Portrait is upside down</button>
+        <button type="button" class="chip" id="ofl">Landscape is upside down</button>
+      </div>
+      <p class="note">Hang the panel upright (portrait) and press <i>This is upright</i>. If the dashboard then reads upside down in portrait or landscape, press the matching button. Without a sensor, turn K2 on the dashboard to rotate by hand.</p>
+    </section>
+
+    <section>
+      <h2>GIFs</h2>
+      <p class="note bad" id="nofs" hidden>The panel's storage is not formatted yet, so GIFs cannot be saved. Format it once on the <a href="/patterns">Patterns</a> page.</p>
+      <label class="drop" id="drop"><input type="file" id="file" accept="image/gif">
+        <p>Drop a <b>.gif</b> here, or click to choose</p></label>
+      <div id="opts" hidden>
+        <div class="row" style="margin-top:10px"><label>Fit</label>
+          <div class="segs" id="fit"><button type="button" class="seg on" data-v="contain">Whole GIF</button><button type="button" class="seg" data-v="cover">Fill, crop</button></div></div>
+        <div class="row"><label>Scaling</label>
+          <div class="segs" id="scale"><button type="button" class="seg on" data-v="sharp">Sharp (pixel art)</button><button type="button" class="seg" data-v="smooth">Smooth</button></div></div>
+        <div class="row"><label></label><button type="button" class="switch" id="split"><i></i><span>Split wide GIFs in portrait: left half on top</span></button></div>
+        <div class="row"><label for="name">Name</label><input id="name" type="text" class="grow" maxlength="24" placeholder="e.g. nyan-cat"></div>
+        <div class="actions"><button type="button" class="go" id="up" disabled>Upload</button><span class="msg" id="gmsg"></span></div>
+      </div>
+      <h2 style="margin-top:20px">On the panel</h2>
+      <ul id="gifs"></ul>
+      <p class="note">A GIF plays after every dashboard screen: at least one loop, at most 20 seconds. The panel keeps a portrait and a landscape version.</p>
+    </section>
+  </div>
+</div>
+
+<footer>api.open-meteo.com · geocoding-api.open-meteo.com · <a href="https://github.com/mptrs/patternflow-dashboard">patternflow-dashboard</a></footer>
+</div>
+<script>
+function $(i){return document.getElementById(i)}
+function say(t,kind,el){PF.say(t,kind,el||$('msg'))}
+function post(url,body){
+  return fetch(url,{method:'POST',body:body}).then(function(r){
+    return r.json().catch(function(){return {}}).then(function(d){if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d})});
+}
+const hm=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+const ONAMES=['landscape','portrait','landscape, upside down','portrait, upside down'];
+function geo(q){return fetch('https://geocoding-api.open-meteo.com/v1/search?count=5&name='+encodeURIComponent(q)).then(r=>r.json()).then(j=>j.results||[])}
+function age(s){return s<60?s+' s':s<3600?Math.round(s/60)+' min':Math.round(s/3600)+' h'}
+
+// ── status: what the panel holds ──────────────────────────────────────
+let filled=false;
+function fill(s){
+  $('st').textContent=s.place||'no location set';
+  $('d-loc').textContent=s.place?`${s.place} (${s.lat.toFixed(2)}, ${s.lon.toFixed(2)})`:'not set';
+  $('d-wx').textContent=s.error?s.error:(s.updated?age(s.updated)+' old':(s.place?'waiting':'-'));
+  $('d-wx').className=s.error?'bad':(s.updated?'ok':'');
+  // 0 bytes free: the storage partition was never formatted (Patternflow's Patterns page does that)
+  if(s.free>0){$('d-free').textContent=(s.free/1048576).toFixed(1)+' MB';$('d-free').className=''}
+  else{$('d-free').innerHTML='not formatted: <a href="/patterns">Patterns</a>';$('d-free').className='bad'}
+  $('nofs').hidden=s.free>0;
+  if(!filled){
+    filled=true;
+    clocks=s.clocks.split('\n').filter(Boolean).map(l=>{const[name,spec,label]=l.split('|');return{name,spec,label};});
+    night={on:s.night.on,start:hm(s.night.start),end:hm(s.night.end)};
+    $('ns').value=night.start;$('ne').value=night.end;$('non').classList.toggle('on',night.on);
+  }
+  drawClocks();
+  const list=$('gifs');list.innerHTML='';
+  for(const g of s.gifs){const li=document.createElement('li'),n=document.createElement('span'),b=document.createElement('button');
+    n.className='nm';n.textContent=g;b.className='del';b.textContent='Delete';
+    b.onclick=()=>{if(!confirm('Delete '+g+' from the panel?'))return;li.style.opacity=.3;
+      post('/api/dashboard/gif/delete?name='+g).then(()=>{say('deleted '+g,'ok');dash.now()},e=>say(e.message,'err'))};
+    li.append(n,b);list.append(li);}
+  if(!s.gifs.length)list.innerHTML='<li class="empty">No GIFs yet: the dashboard goes straight to the next screen.</li>';
+}
+const dash=PF.poll('/api/dashboard',10000,function(d){if(d)fill(d)});
+
+// ── location ──────────────────────────────────────────────────────────
+$('f').onsubmit=e=>{e.preventDefault();const r=$('r');r.innerHTML='';
+  PF.busy(e.submitter||$('f').querySelector('button'),geo($('q').value).then(list=>{
+    for(const p of list){const li=document.createElement('li'),b=document.createElement('button');b.type='button';b.className='chip';
+      b.textContent=[p.name,p.admin1,p.country_code].filter(Boolean).join(', ');
+      b.onclick=()=>PF.busy(b,post('/api/dashboard',new URLSearchParams({lat:p.latitude,lon:p.longitude,place:p.name}))
+        .then(d=>{r.innerHTML='';$('q').value='';fill(d);dash.now();say('location saved','ok')},e=>say(e.message,'err')));
+      li.append(b);r.append(li);}
+    if(!list.length)r.innerHTML='<li class="empty">Nothing found.</li>';
+  },()=>say('the place search needs internet','err')));};
+
+// ── night mode: saved as you change it ────────────────────────────────
+let night=null,nightTimer=null;
+function saveNight(){
+  night={on:$('non').classList.contains('on'),start:$('ns').value,end:$('ne').value};
+  if(!night.start||!night.end)return;
+  PF.dirty=true;clearTimeout(nightTimer);say('sending…','info');
+  nightTimer=setTimeout(()=>post('/api/dashboard/night',new URLSearchParams({on:night.on?1:0,start:night.start,end:night.end}))
+    .then(()=>{PF.dirty=false;say(night.on?`sleeps ${night.start}–${night.end}`:'night mode off','ok')},e=>say(e.message,'err')),300);
+}
+$('non').onclick=()=>{$('non').classList.toggle('on');saveNight()};
+$('ns').onchange=saveNight;$('ne').onchange=saveNight;
+
+// ── world clocks: the zone rule is derived from the browser's time zone database
+function zoneSpec(zone) {
+  const fmt = new Intl.DateTimeFormat('en-US', {timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric'});
+  const off = t => { const p = fmt.formatToParts(new Date(t)), g = k => +p.find(x => x.type === k).value;
+    return Math.round((Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute')) - Math.floor(t / 60000) * 60000) / 60000); };
+  const y = new Date().getUTCFullYear(), t0 = Date.UTC(y, 0, 1), t1 = Date.UTC(y + 1, 0, 1), changes = [];
+  let prev = off(t0);
+  for (let t = t0 + 3600e3; t <= t1; t += 3600e3) {
+    const o = off(t); if (o === prev) continue;
+    let lo = t - 3600e3, hi = t;  // narrow the switch down to the minute
+    while (hi - lo > 60e3) { const mid = lo + Math.floor((hi - lo) / 120e3) * 60e3; if (off(mid) === prev) lo = mid; else hi = mid; }
+    changes.push({t: hi, from: prev, to: o}); prev = o;
+  }
+  const s = changes.find(c => c.to > c.from), e = changes.find(c => c.to < c.from);
+  if (!s || !e) return `${prev},0`;  // no daylight saving time
+  const std = Math.min(s.from, e.to), dst = s.to - s.from;
+  const dim = (yy, m) => new Date(Date.UTC(yy, m, 0)).getUTCDate();
+  const when = (yy, r, from) => { const firstWd = new Date(Date.UTC(yy, r.m - 1, 1)).getUTCDay();
+    let d = 1 + (r.wd - firstWd + 7) % 7 + 7 * (r.w - 1); while (d > dim(yy, r.m)) d -= 7;
+    return Date.UTC(yy, r.m - 1, d) + (r.min - from) * 60e3; };
+  const holds = (r, c) => { for (let yy = y; yy < y + 7; yy++) { const t = when(yy, r, c.from); if (off(t - 60e3) !== c.from || off(t) !== c.to) return false; } return true; };
+  const rule = c => { const l = new Date(c.t + c.from * 60e3), min = l.getUTCHours() * 60 + l.getUTCMinutes();
+    for (const k of [0, -1, 1, -2, 2, -3, 3]) {  // describe the moment from a weekday k days away
+      const a = new Date(l.getTime() + k * 864e5); if (a.getUTCMonth() !== l.getUTCMonth()) continue;
+      const m = a.getUTCMonth() + 1, d = a.getUTCDate(), wd = a.getUTCDay();
+      const weeks = d + 7 > dim(a.getUTCFullYear(), m) ? [5, Math.ceil(d / 7)] : [Math.ceil(d / 7)];
+      for (const w of weeks) { const r = {m, w, wd, min: min - k * 1440}; if (holds(r, c)) return `${m}.${w}.${wd}/${r.min}`; }
+    }
+    return null; };
+  const rs = rule(s), re = rule(e);
+  if (!rs || !re) return null;  // a rule this format cannot express
+  return `${std},${dst},${rs},${re}`;
+}
+let clocks=[];
+const clockTime=z=>{try{return new Intl.DateTimeFormat('en-GB',{timeZone:z,hour:'2-digit',minute:'2-digit'}).format(new Date());}catch(e){return '';}};
+function clocksChanged(){PF.dirty=true;$('csave').disabled=false;drawClocks()}
+function drawClocks(){
+  if(document.activeElement&&document.activeElement.closest&&document.activeElement.closest('#clocks'))return;  // not while a name is being typed
+  const ul=$('clocks');ul.innerHTML='';
+  clocks.forEach((c,i)=>{const li=document.createElement('li');
+    const n=document.createElement('input');n.type='text';n.value=c.name;n.maxLength=10;
+    n.oninput=()=>{c.name=n.value.toUpperCase().replace(/[^ -~]|["\\|]/g,'');PF.dirty=true;$('csave').disabled=false;};
+    const t=document.createElement('span');t.className='nm t';t.textContent=`${c.label||'?'}${c.note?' · '+c.note:''}`;
+    const tm=document.createElement('span');tm.className='t';tm.textContent=c.label?clockTime(c.label):'';
+    const b=document.createElement('button');b.className='del';b.textContent='Remove';b.onclick=()=>{clocks.splice(i,1);clocksChanged();};
+    li.append(n,t,tm,b);ul.append(li);});
+  if(!clocks.length)ul.innerHTML='<li class="empty">No world clocks: the screen is skipped.</li>';
+  $('cq').disabled=$('cgo').disabled=clocks.length>=4;
+}
+$('cf').onsubmit=e=>{e.preventDefault();const r=$('cr');r.innerHTML='';
+  PF.busy($('cgo'),geo($('cq').value).then(list=>{
+    for(const p of list){const li=document.createElement('li'),b=document.createElement('button');b.type='button';b.className='chip';
+      b.textContent=[p.name,p.admin1,p.country_code].filter(Boolean).join(', ')+' · '+p.timezone;
+      b.onclick=()=>{let spec=zoneSpec(p.timezone),note='';
+        if(!spec){const f=new Intl.DateTimeFormat('en-US',{timeZone:p.timezone,timeZoneName:'longOffset'}).formatToParts(new Date()).find(x=>x.type==='timeZoneName').value;
+          const m=f.match(/([+-])(\d+):?(\d*)/);spec=`${m?(m[1]==='-'?-1:1)*(+m[2]*60+(+m[3]||0)):0},0`;note='daylight saving time not followed';}
+        clocks.push({name:p.name.toUpperCase().normalize('NFD').replace(/[^ -~]|["\\|]/g,'').slice(0,10),spec,label:p.timezone,note});
+        r.innerHTML='';$('cq').value='';clocksChanged();};
+      li.append(b);r.append(li);}
+    if(!list.length)r.innerHTML='<li class="empty">Nothing found.</li>';
+  },()=>say('the place search needs internet','err')));};
+$('csave').onclick=()=>{const text=clocks.map(c=>`${c.name}|${c.spec}|${c.label}`).join('\n');
+  PF.busy($('csave'),post('/api/dashboard/clocks',new URLSearchParams({clocks:text}))
+    .then(()=>{PF.dirty=false;say('clocks saved','ok',$('cmsg'));setTimeout(()=>{$('csave').disabled=true},0)},e=>say(e.message,'err',$('cmsg'))));};
+
+// ── orientation ───────────────────────────────────────────────────────
+function ofill(s){
+  if(!s)return;
+  $('oauto').classList.toggle('on',s.auto);$('oflip').classList.toggle('on',s.flip);
+  $('d-or').textContent=ONAMES[s.orientation]||'-';
+  $('d-acc').textContent=s.present?(s.sensed<0?'flat or moving':'reads '+ONAMES[s.sensed]):'not connected';
+  $('d-acc').className=s.present?'ok':'';
+  for(const id of['oup','ofp','ofl'])$(id).disabled=!s.present;
+  orient.set(s.present?2000:10000);
+}
+const orient=PF.poll('/api/dashboard/orientation',2000,ofill);
+function setOrient(body,btn){const p=post('/api/dashboard/orientation',new URLSearchParams(body)).then(d=>{ofill(d);say('on the panel','ok')},e=>say(e.message,'err'));if(btn)PF.busy(btn,p);}
+$('oauto').onclick=()=>setOrient({auto:$('oauto').classList.contains('on')?0:1});
+$('oflip').onclick=()=>setOrient({flip:$('oflip').classList.contains('on')?0:1});
+$('oup').onclick=()=>setOrient({action:'upright'},$('oup'));
+$('ofp').onclick=()=>setOrient({action:'flipportrait'},$('ofp'));
+$('ofl').onclick=()=>setOrient({action:'fliplandscape'},$('ofl'));
+
+// ── GIF decoding (GIF87a/89a: LZW, local palettes, transparency, disposal, interlacing)
+function lzw(data,minCode,n){const out=new Uint8Array(n);let op=0;const clear=1<<minCode,eoi=clear+1;let size=minCode+1,next=eoi+1;
+ const prefix=new Int16Array(4096),suffix=new Uint8Array(4096),stack=new Uint8Array(4097);for(let c=0;c<clear;c++){prefix[c]=-1;suffix[c]=c;}
+ let old=-1,first=0,bits=0,acc=0,i=0;
+ while(op<n){while(bits<size){if(i>=data.length)return out;acc|=data[i++]<<bits;bits+=8;}
+  const code=acc&((1<<size)-1);acc>>=size;bits-=size;
+  if(code===clear){size=minCode+1;next=eoi+1;old=-1;continue;}if(code===eoi)break;
+  if(old<0){out[op++]=suffix[code];old=first=code;continue;}
+  let sp=0,cur=code;if(code>=next){stack[sp++]=first;cur=old;}
+  while(cur>=clear){stack[sp++]=suffix[cur];cur=prefix[cur];}stack[sp++]=first=suffix[cur];
+  while(sp&&op<n)out[op++]=stack[--sp];
+  if(next<4096){prefix[next]=old;suffix[next]=first;next++;if(next===(1<<size)&&size<12)size++;}old=code;}
+ return out;}
+function decodeGif(buf){const b=new Uint8Array(buf);if(b[0]!==71||b[1]!==73||b[2]!==70)throw new Error('not a GIF');
+ let p=6;const u16=()=>{p+=2;return b[p-2]|b[p-1]<<8;};const W=u16(),H=u16(),fl=b[p];p+=3;
+ let gct=null;if(fl&128){const n=3*(2<<(fl&7));gct=b.subarray(p,p+n);p+=n;}
+ const cv=new Uint8ClampedArray(W*H*4),frames=[];let ext={delay:100,trans:-1,disp:0};
+ while(p<b.length){const t=b[p++];if(t===0x3B)break;
+  if(t===0x21){const label=b[p++];if(label===0xF9){p++;const f=b[p++];ext.disp=f>>2&7;const d=u16()*10;ext.delay=d<20?100:d;const ti=b[p++];ext.trans=f&1?ti:-1;p++;}
+   else{let s;while((s=b[p++]))p+=s;}continue;}
+  if(t!==0x2C)break;
+  const x=u16(),y=u16(),w=u16(),h=u16(),f=b[p++];let ct=gct;if(f&128){const n=3*(2<<(f&7));ct=b.subarray(p,p+n);p+=n;}
+  const minCode=b[p++],chunks=[];let s,len=0;while((s=b[p++])){chunks.push(b.subarray(p,p+s));p+=s;len+=s;}
+  const data=new Uint8Array(len);let o=0;for(const c of chunks){data.set(c,o);o+=c.length;}
+  const idx=lzw(data,minCode,w*h);let rows=[...Array(h).keys()];
+  if(f&64){rows=[];for(const[s0,st]of[[0,8],[4,8],[2,4],[1,2]])for(let r=s0;r<h;r+=st)rows.push(r);}
+  const saved=ext.disp===3?cv.slice():null;
+  for(let i=0;i<w*h;i++){const ci=idx[i];if(ci===ext.trans||!ct)continue;const X=x+i%w,Y=y+rows[Math.floor(i/w)];if(X>=W||Y>=H)continue;
+   const q=(Y*W+X)*4;cv[q]=ct[ci*3];cv[q+1]=ct[ci*3+1];cv[q+2]=ct[ci*3+2];cv[q+3]=255;}
+  frames.push({rgba:cv.slice(),delay:ext.delay});
+  if(ext.disp===2)for(let r=0;r<h;r++)for(let c=0;c<w;c++){if(x+c<W&&y+r<H)cv.fill(0,((y+r)*W+x+c)*4,((y+r)*W+x+c)*4+4);}
+  else if(saved)cv.set(saved);
+  ext={delay:100,trans:-1,disp:0};}
+ return{W,H,frames};}
+
+// ── convert to clips: scale to 64x128 and 128x64, map to the 6x7x6 palette
+const G7=[0,43,85,128,170,213,255];
+function convert(gif,tw,th,fit,sharp,split){let fr=gif.frames;const step=Math.ceil(fr.length/120);
+ // split: a wide GIF becomes its left half above its right half (half as wide, twice as tall)
+ const half=Math.floor(gif.W/2),SW=split?half:gif.W,SH=split?gif.H*2:gif.H;
+ const raw=document.createElement('canvas');raw.width=gif.W;raw.height=gif.H;const rc=raw.getContext('2d');
+ const src=document.createElement('canvas');src.width=SW;src.height=SH;const sc=src.getContext('2d');
+ const dst=document.createElement('canvas');dst.width=tw;dst.height=th;const dc=dst.getContext('2d',{willReadFrequently:true});dc.imageSmoothingEnabled=!sharp;
+ const s=fit==='cover'?Math.max(tw/SW,th/SH):Math.min(tw/SW,th/SH),dw=SW*s,dh=SH*s;
+ const out=[];for(let i=0;i<fr.length;i+=step){let delay=0;for(let k=i;k<Math.min(i+step,fr.length);k++)delay+=fr[k].delay;
+  rc.putImageData(new ImageData(fr[i].rgba,gif.W,gif.H),0,0);sc.clearRect(0,0,SW,SH);
+  if(split){sc.drawImage(raw,0,0,half,gif.H,0,0,half,gif.H);sc.drawImage(raw,half,0,half,gif.H,0,gif.H,half,gif.H);}else sc.drawImage(raw,0,0);
+  dc.fillStyle='#000';dc.fillRect(0,0,tw,th);dc.drawImage(src,(tw-dw)/2,(th-dh)/2,dw,dh);
+  const px=dc.getImageData(0,0,tw,th).data,ix=new Uint8Array(tw*th);
+  for(let j=0;j<tw*th;j++){const r=px[j*4],g=px[j*4+1],b=px[j*4+2];ix[j]=Math.round(r/51)*42+Math.round(g/42.5)*6+Math.round(b/51);}
+  out.push({ix,delay:Math.min(65535,delay)});}
+ return{w:tw,h:th,frames:out};}
+function clipBytes(c){const n=c.frames.length,buf=new Uint8Array(12+2*n+n*c.w*c.h),dv=new DataView(buf.buffer);
+ buf.set([68,71,70,49]);dv.setUint16(4,c.w,true);dv.setUint16(6,c.h,true);dv.setUint16(8,n,true);
+ c.frames.forEach((f,i)=>{dv.setUint16(12+2*i,f.delay,true);buf.set(f.ix,12+2*n+i*c.w*c.h);});return buf;}
+
+// ── the GIF form ──────────────────────────────────────────────────────
+let gif=null,clips=null,anim=null;
+const segVal=id=>$(id).querySelector('.seg.on').dataset.v;
+function preview(){if(!gif)return;
+ const fit=segVal('fit'),sharp=segVal('scale')==='sharp',split=$('split').classList.contains('on');
+ clips={p:convert(gif,64,128,fit,sharp,split),l:convert(gif,128,64,fit,sharp,false)};
+ const kb=Math.round((clipBytes(clips.p).length+clipBytes(clips.l).length)/1024);
+ say(`${clips.p.frames.length} frames, ${kb} KB`,'info',$('gmsg'));$('up').disabled=false;
+ clearTimeout(anim);let i=0;const tick=()=>{for(const[k,c]of[['pp',clips.p],['pl',clips.l]]){const f=c.frames[i%c.frames.length],img=new ImageData(c.w,c.h);
+   for(let j=0;j<c.w*c.h;j++){const v=f.ix[j];img.data[j*4]=Math.floor(v/42)*51;img.data[j*4+1]=G7[Math.floor(v/6)%7];img.data[j*4+2]=v%6*51;img.data[j*4+3]=255;}
+   $(k).getContext('2d').putImageData(img,0,0);}
+  anim=setTimeout(tick,clips.p.frames[i%clips.p.frames.length].delay);i++;};tick();}
+async function pick(f){if(!f)return;
+ try{gif=decodeGif(await f.arrayBuffer());}catch(e){say('could not read this GIF','err',$('gmsg'));return;}
+ $('opts').hidden=false;$('pv-empty').hidden=true;document.documentElement.classList.add('has-gif');$('pp').hidden=$('pl').hidden=false;$('split').classList.toggle('on',gif.W>=1.6*gif.H);
+ $('name').value=f.name.replace(/\.gif$/i,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);
+ PF.dirty=true;preview();}
+$('file').onchange=()=>pick($('file').files[0]);
+const drop=$('drop');
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over')});
+drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');pick(e.dataTransfer.files[0])});
+for(const id of['fit','scale'])$(id).addEventListener('click',e=>{const b=e.target.closest('.seg');if(!b)return;
+  $(id).querySelectorAll('.seg').forEach(x=>x.classList.toggle('on',x===b));preview();});
+$('split').onclick=()=>{$('split').classList.toggle('on');preview()};
+$('up').onclick=()=>{const name=$('name').value;if(!/^[a-z0-9-]{1,24}$/.test(name)){say('name: a-z, 0-9 and - only','err',$('gmsg'));return;}
+ const send=async()=>{for(const o of['p','l']){say(`uploading ${o==='p'?'portrait':'landscape'}…`,'info',$('gmsg'));
+   const fd=new FormData();fd.append('clip',new Blob([clipBytes(clips[o])]),'clip.dgf');
+   await post(`/api/dashboard/gif?name=${name}&o=${o}`,fd);}};
+ PF.busy($('up'),PF.hold(send())).then(()=>{PF.dirty=false;say('uploaded '+name,'ok',$('gmsg'));dash.now()},e=>say('upload failed: '+e.message,'err',$('gmsg')));};
+</script>
+</body></html>
