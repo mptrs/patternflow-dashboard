@@ -1,0 +1,54 @@
+name: build
+
+# Builds the firmware and the patterns on every push. A tag like v0.2.0
+# also publishes them as a GitHub release, so nobody has to build anything.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      pf_version:
+        description: "Patternflow version to build against (empty = PATTERNFLOW_VERSION)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('PATTERNFLOW_VERSION') }}
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware and patterns
+        env:
+          PF_VERSION: ${{ inputs.pf_version }}
+        run: |
+          [ -n "$PF_VERSION" ] || unset PF_VERSION
+          ./build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patternflow-dashboard
+          path: dist/*
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes

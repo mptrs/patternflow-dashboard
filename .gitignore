@@ -1,0 +1,6 @@
+.build/
+.venv/
+dist/
+.DS_Store
+__pycache__/
+.build-log.txt
