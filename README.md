@@ -5,7 +5,7 @@ A community edition of [Patternflow](https://github.com/engmung/Patternflow), th
 - **Game of Life**: a pattern you play with the four knobs. Install it like any other pattern.
 - **Dashboard** (work in progress): a clock with moon phase, weather, forecast and world clocks. It shows up as an extra entry in the K4 pattern browser.
 
-<p align="center"><img src="docs/game-of-life.png" alt="Game of Life on a 128×64 Patternflow panel" width="640"></p>
+<p align="center"><img src="docs/game-of-life.gif" alt="Game of Life on a 128×64 Patternflow panel: fading in, a mirrored seed, Day & Night, a world dissolving and methuselahs growing" width="512"></p>
 
 > **Status:** early. The firmware and the Game of Life pattern build and pass their tests. Neither has run on real hardware yet. The dashboard is only a big clock so far.
 
@@ -20,13 +20,13 @@ Switching between this edition and the official one keeps your patterns, Wi-Fi n
 | Knob | Turn | Press |
 |---|---|---|
 | **K1** | speed: 1–60 generations per second | pause / resume |
-| **K2** | density of a new world | new world |
-| **K3** | color theme (ocean, fire, matrix, neon) | next theme |
+| **K2** | density of a new world | new world, in the next seed style: random, mirrored, methuselahs |
+| **K3** | color theme (ocean, fire, matrix, neon) | next rule: Life, HighLife, Day & Night |
 | **K4** | length of the trail dead cells leave | sprinkle live cells into a dying world |
 
 The long presses stay Patternflow's own (K4 held = pattern browser).
 
-The world wraps around at the edges. It runs until it is truly finished: once the whole grid repeats an earlier state, nothing new can ever happen. That covers still lifes, blinkers, and gliders that loop around forever. The end state stays visible for 40 generations, then a new world starts.
+Cells fade in when they are born, shift color as they age and leave a trail when they die. The world wraps around at the edges. It runs until it is truly finished: once the whole grid repeats an earlier state, nothing new can ever happen. That covers still lifes, blinkers, and gliders that loop around forever. The end state stays visible for 40 generations, then the world dissolves and a new one grows.
 
 **Try it without hardware:** paste [`patterns/game-of-life/game-of-life.js`](patterns/game-of-life/game-of-life.js) into the [Patternflow Live Editor](https://patternflow.work/pattern).
 
