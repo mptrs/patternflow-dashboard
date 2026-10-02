@@ -20,12 +20,17 @@ namespace DashHttp {
 inline WebServer& server() { return PatternflowPatternsHttp::server(); }
 
 static const char PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard</title>
-<style>body{font:16px system-ui,sans-serif;background:#111;color:#eee;max-width:34rem;margin:2rem auto;padding:0 1rem}
-h2{margin-top:2rem;border-top:1px solid #333;padding-top:1rem}input,button,select{font:inherit;padding:.45rem;border-radius:.4rem;border:1px solid #444;background:#222;color:#eee}
-button{background:#2a6;border:0;cursor:pointer}button:disabled{opacity:.35;cursor:default}button.del{background:#733}ul{list-style:none;padding:0}li{margin:.3rem 0;display:flex;gap:.5rem;align-items:center}
-li .grow{flex:1}.muted{color:#999}canvas{image-rendering:pixelated;background:#000;border:1px solid #333;margin:.5rem .5rem 0 0}
-label{display:inline-flex;gap:.4rem;align-items:center;margin:.3rem 1rem .3rem 0}</style></head><body>
+<script src="/pf-console.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Patternflow - Dashboard</title>
+<style>:root{--cream:#0C0B09;--ink:#EDE7DB;--muted:#8A8272;--faint:#5A5546;--rule:#242118;--led:#FF5C2E;--ok:#57B87F;--panel:#131110;--lift:#1B1914;
+--sans:'Inter',ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;max-width:960px;margin:0 auto;padding:28px 20px 64px}
+h1{font-size:15px;font-weight:600;margin:0 0 4px}h2{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:28px 0 10px;padding-top:16px;border-top:1px solid var(--rule)}
+input,button,select{font:inherit;font-size:12px;height:34px;padding:0 10px;border-radius:2px;border:1px solid var(--rule);background:var(--panel);color:var(--ink)}
+button{cursor:pointer;border-color:var(--led);color:var(--ink)}button:hover{background:var(--lift)}button.del{border-color:var(--rule);color:var(--muted)}
+button:disabled{opacity:.35;cursor:default}ul{list-style:none;padding:0}li{margin:.3rem 0;display:flex;gap:.5rem;align-items:center}li .grow{flex:1}
+.muted{color:var(--muted)}canvas{image-rendering:pixelated;background:#000;border:1px solid var(--rule);margin:.5rem .5rem 0 0}
+label{display:inline-flex;gap:.4rem;align-items:center;margin:.3rem 1rem .3rem 0;color:var(--muted)}b{font-family:var(--mono);font-weight:500}</style></head><body>
 <h1>Dashboard</h1>
 
 <h2>Location</h2><p class="muted">For the weather screens.</p>
