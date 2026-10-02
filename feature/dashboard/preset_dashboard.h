@@ -3,8 +3,8 @@
 //
 // Shows up in the K4 pattern browser like any other pattern and rotates
 // through: clock + moon, weather now, the next hours, the next days and
-// world clocks. Every screen has a portrait (64x128, Patternflow's usual
-// mounting) and a landscape (128x64) layout.
+// world clocks, with an uploaded GIF after every screen. Every screen has a
+// portrait (64x128, Patternflow's usual mounting) and a landscape (128x64) layout.
 //
 // K1 turn: previous / next screen      K1 click: automatic rotation on / off
 // K2 turn: orientation                 K4 click: back to the previous pattern
@@ -19,6 +19,7 @@
 #include "../../src/core_mem.h"
 #include "dashboard_config.h"
 #include "dash_gfx.h"
+#include "dash_gifs.h"
 #include "dash_icons.h"
 #include "dash_state.h"
 #include "dash_tz.h"
@@ -32,12 +33,18 @@ constexpr bool ABSOLUTE_READY = false;
 
 using namespace DashGfx;
 
-enum Screen { CLOCK, WEATHER, HOURLY, FORECAST, WORLD, SCREEN_COUNT };
+enum Screen { CLOCK, WEATHER, HOURLY, FORECAST, WORLD, GIF, SCREEN_COUNT };
+// The rotation: a GIF after every screen (GIF slots are skipped when there are none).
+static const int SEQUENCE[] = {CLOCK, GIF, WEATHER, GIF, HOURLY, GIF, FORECAST, GIF, WORLD, GIF};
+constexpr int SLOTS = sizeof(SEQUENCE) / sizeof(SEQUENCE[0]);
+constexpr float GIF_SECONDS = 10;  // at least one full loop, at most twice this long
 static const char* const DAY_NAMES[] = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"};
 static const char* const MONTH_NAMES[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                                           "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
 
-static int screen = CLOCK;
+static int slot = 0;            // position in SEQUENCE
+static int screen = CLOCK;      // SEQUENCE[slot]
+static int gifOrientation = -1; // orientation the playing clip was opened for
 static float onScreen = 0;      // seconds on the current screen
 static float manualHold = 0;    // seconds left before rotating after a manual pick
 static bool autoRotate = true;
@@ -47,6 +54,7 @@ static void* alloc(size_t n) { return PFMem::alloc(n); }
 
 static int screenSeconds(int s) { return s == CLOCK ? DashConfig::SECONDS_CLOCK : DashConfig::SECONDS_OTHER; }
 static bool portrait() { return DashGfx::H > DashGfx::W; }
+static bool portraitFor(int orientation) { return orientation & 1; }
 
 static void message(const char* a, const char* b = nullptr, const char* c = nullptr) {
   const char* lines[] = {a, b, c};
@@ -246,6 +254,20 @@ static void drawWorld() {
   }
 }
 
+// ---------------------------------------------------------------- rotation
+// Moves `step` slots on, skipping GIF slots when there is nothing to play.
+static void moveSlot(int step) {
+  for (int tries = 0; tries < SLOTS; tries++) {
+    slot = ((slot + step) % SLOTS + SLOTS) % SLOTS;
+    screen = SEQUENCE[slot];
+    if (screen != GIF) break;
+    gifOrientation = DashState::orientation;
+    if (DashGifs::player.start(portraitFor(gifOrientation))) break;
+  }
+  if (screen != GIF) DashGifs::player.stop();
+  onScreen = 0;
+}
+
 // ---------------------------------------------------------------- pattern API
 void setup() {
   onScreen = 0;
@@ -254,8 +276,7 @@ void setup() {
 
 void update(float dt, const InputFrame& input) {
   if (input.knobDeltas[0]) {
-    screen = ((screen + (input.knobDeltas[0] > 0 ? 1 : -1)) % SCREEN_COUNT + SCREEN_COUNT) % SCREEN_COUNT;
-    onScreen = 0;
+    moveSlot(input.knobDeltas[0] > 0 ? 1 : -1);
     manualHold = DashConfig::SECONDS_MANUAL_HOLD;
   }
   if (input.btnPressed[0]) autoRotate = !autoRotate;
@@ -265,16 +286,22 @@ void update(float dt, const InputFrame& input) {
   }
   if (input.btnPressed[3]) DashState::wantBack = true;
 
+  if (screen == GIF) {
+    if (gifOrientation != DashState::orientation) {  // turned while playing: reopen in the new shape
+      gifOrientation = DashState::orientation;
+      if (!DashGifs::player.start(portraitFor(gifOrientation))) moveSlot(1);
+    }
+    DashGifs::player.advance(dt);
+  }
   if (manualHold > 0) {
     manualHold -= dt;
     return;
   }
   if (!autoRotate) return;
   onScreen += dt;
-  if (onScreen >= screenSeconds(screen)) {
-    screen = (screen + 1) % SCREEN_COUNT;
-    onScreen = 0;
-  }
+  const bool gifDone = screen == GIF && ((DashGifs::player.loops > 0 && onScreen >= GIF_SECONDS) ||
+                                         onScreen >= 2 * GIF_SECONDS || !DashGifs::player.playing());
+  if (screen == GIF ? gifDone : onScreen >= screenSeconds(screen)) moveSlot(1);
 }
 
 void draw() {
@@ -285,6 +312,7 @@ void draw() {
     case HOURLY: drawHourly(); break;
     case FORECAST: drawForecast(); break;
     case WORLD: drawWorld(); break;
+    case GIF: DashGifs::player.draw(); break;
   }
   PFCanvas::present();
 }

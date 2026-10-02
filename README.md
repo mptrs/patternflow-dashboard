@@ -3,7 +3,8 @@
 A community edition of [Patternflow](https://github.com/engmung/Patternflow), the open-source LED synthesizer. It adds two things and changes nothing else:
 
 - **Game of Life**: a pattern you play with the four knobs. Install it like any other pattern.
-- **Dashboard**: a clock with moon phase, weather now, the next hours, the next days and world clocks. It shows up as an extra entry in the K4 pattern browser.
+- **Dashboard**: a clock with moon phase, weather now, the next hours, the next days and world clocks, with your own GIFs in between. It shows up as an extra entry in the K4 pattern browser.
+- **Night mode**: the whole panel sleeps at night (default 22:00–08:00), whatever pattern is running.
 
 <p align="center"><img src="docs/game-of-life.gif" alt="Game of Life on a 128×64 Patternflow panel: fading in, a mirrored seed, Day & Night, a world dissolving and methuselahs growing" width="512"></p>
 
@@ -36,7 +37,7 @@ Cells fade in when they are born, shift color as they age and leave a trail when
 
 <p align="center"><img src="docs/dashboard-portrait.png" alt="The dashboard screens in portrait: clock with moon, weather now, next hours, next days, world clocks, and the message when no location is set" width="100%"></p>
 
-Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, the next hours, the next four days and world clocks (10 s each). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
+Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, the next hours, the next four days and world clocks (10 s each). A GIF plays after every screen, if you have uploaded any (at least one full loop, at most 20 s). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
 
 | Knob | Turn | Press |
 |---|---|---|
@@ -47,6 +48,22 @@ Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: c
 **Set your location** at `http://patternflow.local/dashboard`: type a city, pick it from the list. The browser looks the place up; the panel only stores its coordinates, in its own settings space. Weather comes from [Open-Meteo](https://open-meteo.com/) (free, no API key) every 15 minutes. The fetch runs on the ESP32's second core, so the panel never stutters while it loads.
 
 The weather icons are drawn from shapes rather than bitmaps, so they stay sharp at 64, 32 and 12 pixels. The home timezone is Central European Time with daylight saving (`DASH_TZ` in `feature/dashboard/dashboard_config.h`). The world clocks are in the same file.
+
+### GIFs
+
+Upload them on the same page, `http://patternflow.local/dashboard`. Pick a GIF and the browser does the work: it decodes it, shows a live preview in portrait and landscape, and converts it. You choose between *whole GIF* (black bars) or *fill* (cropped), and sharp (pixel art) or smooth scaling. The panel stores a portrait and a landscape version, in a 252-colour palette at one byte per pixel (8 KB per frame), and streams the frames from flash. GIFs with more than 120 frames are thinned out so the whole animation still fits. Delete them from the list on the same page.
+
+### Night mode
+
+The panel sleeps from 22:00 to 08:00 by default. Change the times or switch it off on `http://patternflow.local/dashboard`. It uses Patternflow's own sleep: the LEDs are off and the board idles, but it stays on Wi-Fi. Any knob or button wakes it. Woken during the night, it goes back to sleep after 10 minutes without a knob being touched. Night mode works whatever pattern is running, not only on the dashboard.
+
+### Trying the settings page without a panel
+
+```bash
+python3 tools/mock_panel.py      # then open http://localhost:8765/dashboard
+```
+
+This serves the real page from the firmware source and pretends to be a panel. Uploaded clips land in `.mock_panel/`.
 
 <details><summary>Landscape layouts</summary>
 
@@ -82,7 +99,8 @@ Releases are built by GitHub Actions: push a tag such as `v0.2.0` and the firmwa
 
 | Path | What it is |
 |---|---|
-| `feature/dashboard/` | the Patternflow feature: copied into `firmware/patternflow/features/` at build time. `preset_dashboard.h` has the screens, `dash_weather.h` the Open-Meteo fetch, `dash_icons.h` the icons, `dash_http.h` the settings page |
+| `feature/dashboard/` | the Patternflow feature: copied into `firmware/patternflow/features/` at build time. `preset_dashboard.h` has the screens, `dash_weather.h` the Open-Meteo fetch, `dash_icons.h` the icons, `dash_gifs.h` the GIF player, `dash_night.h` night mode, `dash_http.h` the settings page (including the in-browser GIF decoder) |
+| `tools/mock_panel.py` | a pretend panel for trying the settings page |
 | `edition/` | the edition's two files: which features it carries, and its name and version |
 | `patterns/` | patterns, each as a C++ header (for the panel) and a JavaScript twin (for the Live Editor) |
 | `build.sh` | fetches Patternflow, adds our files, builds firmware and patterns |
