@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A pretend Patternflow panel for trying the dashboard settings page without hardware.
 
-    python3 tools/mock_panel.py [port]        then open http://localhost:8765/dashboard
+    python3 tools/mock_panel.py [port] [--accel]   then open http://localhost:8765/dashboard
 
 Serves the real page straight out of feature/dashboard/dash_http.h and imitates
 its API. Uploaded GIF clips land in .mock_panel/ (checked the same way the panel
@@ -21,6 +21,8 @@ STORE = ROOT / ".mock_panel"
 STORE.mkdir(exist_ok=True)
 PAGE = re.search(r'R"HTML\((.*?)\)HTML"', (ROOT / "feature/dashboard/dash_http.h").read_text(), re.S).group(1)
 state = {"place": "", "lat": 0.0, "lon": 0.0, "night": {"on": True, "start": 22 * 60, "end": 8 * 60}}
+# No accelerometer on a pretend panel (pass --accel to pretend there is one, hanging upright)
+accel = {"present": "--accel" in sys.argv, "auto": True, "flip": True, "orientation": 1, "sensed": 1, "g": [1.0, 0.02, 0.04]}
 
 
 def clips():
@@ -42,6 +44,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, PAGE, "text/html; charset=utf-8")
         if url.path == "/api/dashboard":
             return self.send(200, json.dumps({**state, "updated": 0, "error": "", "free": 8 * 1048576, "gifs": clips()}))
+        if url.path == "/api/dashboard/orientation":
+            return self.send(200, json.dumps(accel if accel["present"] else {**accel, "sensed": -1, "g": [0, 0, 0]}))
         if url.path.startswith("/test/"):  # serves files for automated tests
             f = ROOT / ".mock_panel" / "test" / Path(url.path).name
             if f.exists():
@@ -56,6 +60,11 @@ class Handler(BaseHTTPRequestHandler):
             f = {k: v[0] for k, v in parse_qs(body.decode()).items()}
             state.update(place=f.get("place", ""), lat=float(f["lat"]), lon=float(f["lon"]))
             return self.send(200, json.dumps(state))
+        if url.path == "/api/dashboard/orientation":
+            f = {k: v[0] for k, v in parse_qs(body.decode()).items()}
+            if "auto" in f: accel["auto"] = f["auto"] == "1"
+            if "flip" in f: accel["flip"] = f["flip"] == "1"
+            return self.send(200, json.dumps(accel))
         if url.path == "/api/dashboard/night":
             f = {k: v[0] for k, v in parse_qs(body.decode()).items()}
             hm = lambda s: int(s[:2]) * 60 + int(s[3:5])
@@ -86,6 +95,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+    port = int(next((a for a in sys.argv[1:] if a.isdigit()), 8765))
     print(f"mock panel: http://localhost:{port}/dashboard")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

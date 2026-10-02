@@ -8,7 +8,9 @@
 #include <FFat.h>
 #include "../../src/core_loop_sync.h"
 #include "../../src/core_patterns_http.h"
+#include "dash_accel.h"
 #include "dash_gifs.h"
+#include "dash_state.h"
 #include "dash_night.h"
 #include "dash_weather.h"
 
@@ -20,7 +22,7 @@ static const char PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta chars
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard</title>
 <style>body{font:16px system-ui,sans-serif;background:#111;color:#eee;max-width:34rem;margin:2rem auto;padding:0 1rem}
 h2{margin-top:2rem;border-top:1px solid #333;padding-top:1rem}input,button,select{font:inherit;padding:.45rem;border-radius:.4rem;border:1px solid #444;background:#222;color:#eee}
-button{background:#2a6;border:0;cursor:pointer}button.del{background:#733}ul{list-style:none;padding:0}li{margin:.3rem 0;display:flex;gap:.5rem;align-items:center}
+button{background:#2a6;border:0;cursor:pointer}button:disabled{opacity:.35;cursor:default}button.del{background:#733}ul{list-style:none;padding:0}li{margin:.3rem 0;display:flex;gap:.5rem;align-items:center}
 li .grow{flex:1}.muted{color:#999}canvas{image-rendering:pixelated;background:#000;border:1px solid #333;margin:.5rem .5rem 0 0}
 label{display:inline-flex;gap:.4rem;align-items:center;margin:.3rem 1rem .3rem 0}</style></head><body>
 <h1>Dashboard</h1>
@@ -33,6 +35,12 @@ label{display:inline-flex;gap:.4rem;align-items:center;margin:.3rem 1rem .3rem 0
 <form id="nf"><label><input type="checkbox" id="non"> On</label>
 <label>from <input type="time" id="ns"></label><label>until <input type="time" id="ne"></label> <button>Save</button></form>
 <p id="nmsg" class="muted"></p>
+
+<h2>Orientation</h2><p class="muted" id="ostat">…</p>
+<p><label><input type="checkbox" id="oauto"> Turn with the panel (needs the accelerometer)</label><br>
+<label><input type="checkbox" id="oflip"> Also turn Patternflow's patterns when the panel is upside down</label></p>
+<p class="muted">Setting up the accelerometer: hang the panel upright (portrait) and press <i>This is upright</i>. If the dashboard then reads upside down in portrait or landscape, press the matching button.</p>
+<p><button id="oup">This is upright</button> <button id="ofp">Portrait is upside down</button> <button id="ofl">Landscape is upside down</button></p>
 
 <h2>GIFs</h2><p class="muted">Shown between the dashboard screens. <span id="space"></span></p>
 <ul id="gifs"></ul>
@@ -133,7 +141,16 @@ $('up').onclick=async()=>{const name=$('name').value;if(!/^[a-z0-9-]{1,24}$/.tes
   const r=await fetch(`/api/dashboard/gif?name=${name}&o=${o}`,{method:'POST',body:fd});
   if(!r.ok){$('gmsg').textContent='Upload failed: '+(await r.text());$('up').disabled=false;return;}}
  $('gmsg').textContent='Uploaded.';status();};
-status(true);setInterval(()=>status(false),10000);
+const ONAMES=['landscape','portrait','landscape, upside down','portrait, upside down'];
+async function ostatus(first){const s=await (await fetch('/api/dashboard/orientation')).json();
+ if(first){$('oauto').checked=s.auto;$('oflip').checked=s.flip;}
+ $('ostat').textContent=s.present?`Accelerometer found. Showing ${ONAMES[s.orientation]}; it reads ${s.sensed<0?'flat or moving':ONAMES[s.sensed]} (x ${s.g[0].toFixed(2)}, y ${s.g[1].toFixed(2)}, z ${s.g[2].toFixed(2)} g).`
+  :`No accelerometer connected. Showing ${ONAMES[s.orientation]}; turn K2 on the dashboard to rotate by hand.`;
+ for(const id of['oup','ofp','ofl'])$(id).disabled=!s.present;}
+async function orient(body){await fetch('/api/dashboard/orientation',{method:'POST',body:new URLSearchParams(body)});ostatus(false);}
+$('oauto').onchange=()=>orient({auto:$('oauto').checked?1:0});$('oflip').onchange=()=>orient({flip:$('oflip').checked?1:0});
+$('oup').onclick=()=>orient({action:'upright'});$('ofp').onclick=()=>orient({action:'flipportrait'});$('ofl').onclick=()=>orient({action:'fliplandscape'});
+status(true);ostatus(true);setInterval(()=>status(false),10000);setInterval(()=>ostatus(false),2000);
 </script></body></html>)HTML";
 
 inline void sendJson(int code, const String& json) {
@@ -301,7 +318,41 @@ inline void handleDelete() {
   sendJson(200, "{\"ok\":true}");
 }
 
+inline void handleOrientationGet() {
+  char json[200];
+  const float x = DashAccel::gx, y = DashAccel::gy, z = DashAccel::gz;
+  snprintf(json, sizeof json,
+           "{\"present\":%s,\"auto\":%s,\"flip\":%s,\"orientation\":%d,\"sensed\":%d,\"g\":[%.2f,%.2f,%.2f]}",
+           DashAccel::present ? "true" : "false", DashAccel::autoRotate ? "true" : "false",
+           DashAccel::flipPatterns ? "true" : "false", DashState::orientation,
+           DashAccel::present ? DashAccel::orientationOf(x, y, z) : -1, x, y, z);
+  sendJson(200, json);
+}
+
+inline void handleOrientationPost() {
+  const String action = server().arg("action");
+  bool ok = true;
+  (void)PFLoopSync::run([&] {
+    if (server().hasArg("auto")) DashAccel::autoRotate = server().arg("auto") == "1";
+    if (server().hasArg("flip")) DashAccel::flipPatterns = server().arg("flip") == "1";
+    if (action == "upright") ok = DashAccel::calibrateUpright();
+    if (action == "flipportrait") DashAccel::uprightSign = -DashAccel::uprightSign;
+    if (action == "fliplandscape") DashAccel::landscapeSign = -DashAccel::landscapeSign;
+    DashAccel::save();
+    // Apply right away instead of waiting for the next turn
+    const int o = DashAccel::orientationOf(DashAccel::gx, DashAccel::gy, DashAccel::gz);
+    if (DashAccel::present && DashAccel::autoRotate && o >= 0) DashState::orientation = o;
+  });
+  if (!ok) {
+    sendJson(400, "{\"error\":\"hold the panel upright and still\"}");
+    return;
+  }
+  handleOrientationGet();
+}
+
 inline void registerRoutes() {
+  server().on("/api/dashboard/orientation", HTTP_GET, handleOrientationGet);
+  server().on("/api/dashboard/orientation", HTTP_POST, handleOrientationPost);
   server().on("/dashboard", HTTP_GET, handlePage);
   server().on("/api/dashboard", HTTP_GET, handleGet);
   server().on("/api/dashboard", HTTP_POST, handleLocation);

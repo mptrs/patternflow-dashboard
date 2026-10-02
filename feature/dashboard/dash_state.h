@@ -7,6 +7,7 @@ namespace DashState {
 inline int orientation = 1;      // 0 landscape, 1 portrait (Patternflow's usual mounting), 2/3 upside down
 inline bool wantBack = false;    // K4 click: go back to the pattern before the dashboard
 inline int previousPattern = -1; // the last pattern that was not the dashboard
+inline bool dashboardShowing = false;
 
 inline void load() {
   Preferences prefs;

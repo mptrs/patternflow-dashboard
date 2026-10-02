@@ -8,6 +8,8 @@
 //                  and remembering which pattern ran before the dashboard
 //   - takePattern: K4 click on the dashboard goes back to that pattern
 //   - night mode:  requestSleep / onSleep / observeFrame (see dash_night.h)
+//   - rotation:    follows the optional accelerometer (dash_accel.h); composeFrame
+//                  turns Patternflow's own patterns 180 degrees when upside down
 // The screens themselves are the "Dashboard" pattern in preset_dashboard.h.
 //
 // License: MIT
@@ -16,7 +18,9 @@
 #include <string.h>
 #include "../pf_feature.h"
 #include "../../src/core_clock.h"
+#include "../../src/core_mem.h"
 #include "dashboard_config.h"
+#include "dash_accel.h"
 #include "dash_http.h"
 #include "dash_night.h"
 #include "dash_state.h"
@@ -28,6 +32,7 @@ inline void setup() {
   DashWeather::loadSettings();
   DashState::load();
   DashNight::load();
+  DashAccel::begin();
   PatternflowClock::beginSyncTz(DASH_TZ);
   Serial.printf("[DASH] ready, location %s\n", DashWeather::hasLocation() ? DashWeather::place : "not set");
 }
@@ -44,9 +49,28 @@ inline void onNetwork() {
 inline void loop(const PFFeatureFrame& frame) {
   DashWeather::tick();
   DashNight::tick();
-  if (frame.patternName && strcmp(frame.patternName, "Dashboard") != 0 && frame.patternIndex >= 0) {
+  DashState::dashboardShowing = frame.patternName && strcmp(frame.patternName, "Dashboard") == 0;
+  if (frame.patternName && !DashState::dashboardShowing && frame.patternIndex >= 0) {
     DashState::previousPattern = frame.patternIndex;
   }
+  // Follow the accelerometer when the panel is turned (K2 still overrides until the next turn)
+  static uint32_t seen = 0;
+  if (DashAccel::present && DashAccel::autoRotate && DashAccel::stableSerial != seen) {
+    seen = DashAccel::stableSerial;
+    if (DashAccel::stable >= 0) DashState::orientation = DashAccel::stable;
+  }
+}
+
+// Patternflow's own patterns are drawn for one fixed way up. When the panel
+// hangs upside down, turn the whole frame 180 degrees (the dashboard turns itself).
+inline const uint8_t* composeFrame(const uint8_t* frame, int w, int h) {
+  if (!DashAccel::flipPatterns || DashState::dashboardShowing || DashState::orientation < 2) return nullptr;
+  static uint8_t* flipped = nullptr;
+  if (!flipped) flipped = (uint8_t*)PFMem::alloc((size_t)w * h * 3);
+  if (!flipped) return nullptr;
+  const int n = w * h;
+  for (int i = 0; i < n; i++) memcpy(flipped + (n - 1 - i) * 3, frame + i * 3, 3);
+  return flipped;
 }
 
 inline bool takePattern(int* idx) {
@@ -86,7 +110,8 @@ inline const PFFeature descriptor = {
     nullptr,       // drawOverlay
     "/dashboard",  // navPath - the console header link
     "Dashboard",   // navLabel
-    "Location for the weather, night mode, and the GIFs between the dashboard screens.",
+    "Location for the weather, night mode, rotation, and the GIFs between the dashboard screens.",
+    composeFrame,
 };
 
 }  // namespace PFFeatureDashboard

@@ -42,7 +42,7 @@ Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: c
 | Knob | Turn | Press |
 |---|---|---|
 | **K1** | previous / next screen (stays there for a minute) | automatic rotation on / off |
-| **K2** | orientation: portrait, landscape, or either upside down | |
+| **K2** | orientation by hand: portrait, landscape, or either upside down | |
 | **K4** | | back to the pattern you had before the dashboard |
 
 **Set your location** at `http://patternflow.local/dashboard`: type a city, pick it from the list. The browser looks the place up; the panel only stores its coordinates, in its own settings space. Weather comes from [Open-Meteo](https://open-meteo.com/) (free, no API key) every 15 minutes. The fetch runs on the ESP32's second core, so the panel never stutters while it loads.
@@ -52,6 +52,23 @@ The weather icons are drawn from shapes rather than bitmaps, so they stay sharp 
 ### GIFs
 
 Upload them on the same page, `http://patternflow.local/dashboard`. Pick a GIF and the browser does the work: it decodes it, shows a live preview in portrait and landscape, and converts it. You choose between *whole GIF* (black bars) or *fill* (cropped), and sharp (pixel art) or smooth scaling. The panel stores a portrait and a landscape version, in a 252-colour palette at one byte per pixel (8 KB per frame), and streams the frames from flash. GIFs with more than 120 frames are thinned out so the whole animation still fits. Delete them from the list on the same page.
+
+### Automatic rotation (optional accelerometer)
+
+With an accelerometer the dashboard turns with the panel: portrait, landscape, and either way up. Patternflow's own patterns are drawn for one fixed way up, so they can only turn 180 degrees. They do that when the panel hangs upside down (switch it off on the settings page). Without the sensor nothing changes: K2 rotates by hand. The panel looks for a sensor every 10 seconds, so you can plug one in later without restarting.
+
+**Hardware:** an [Adafruit LIS3DH](https://www.adafruit.com/product/2809) (STEMMA QT) and a [STEMMA QT cable with female sockets](https://www.adafruit.com/product/4397), no soldering:
+
+| LIS3DH | ESP32-S3 DevKit |
+|---|---|
+| 3V3 (red) | 3V3 |
+| GND (black) | GND |
+| SDA (blue) | GPIO43 (TX) |
+| SCL (yellow) | GPIO44 (RX) |
+
+GPIO43/44 are the only free header pins on the Patternflow board. The Audio edition uses the same two for its microphone, so you can't have both at once.
+
+**Calibrate once** on `http://patternflow.local/dashboard`: hang the panel upright (portrait) and press *This is upright*. If the dashboard then reads upside down in portrait or in landscape, press the matching button. The sensor is read in a task on the second core, and readings that can't be gravity (lying flat, being moved) are ignored. A missing or failing sensor can never stall the panel.
 
 ### Night mode
 
@@ -99,7 +116,7 @@ Releases are built by GitHub Actions: push a tag such as `v0.2.0` and the firmwa
 
 | Path | What it is |
 |---|---|
-| `feature/dashboard/` | the Patternflow feature: copied into `firmware/patternflow/features/` at build time. `preset_dashboard.h` has the screens, `dash_weather.h` the Open-Meteo fetch, `dash_icons.h` the icons, `dash_gifs.h` the GIF player, `dash_night.h` night mode, `dash_http.h` the settings page (including the in-browser GIF decoder) |
+| `feature/dashboard/` | the Patternflow feature: copied into `firmware/patternflow/features/` at build time. `preset_dashboard.h` has the screens, `dash_weather.h` the Open-Meteo fetch, `dash_icons.h` the icons, `dash_gifs.h` the GIF player, `dash_night.h` night mode, `dash_accel.h` the accelerometer, `dash_http.h` the settings page (including the in-browser GIF decoder) |
 | `tools/mock_panel.py` | a pretend panel for trying the settings page |
 | `edition/` | the edition's two files: which features it carries, and its name and version |
 | `patterns/` | patterns, each as a C++ header (for the panel) and a JavaScript twin (for the Live Editor) |
