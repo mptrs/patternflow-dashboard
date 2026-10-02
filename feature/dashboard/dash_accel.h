@@ -7,7 +7,8 @@
 // Nothing here may break a panel without the sensor:
 //   - all I2C traffic runs in a low-priority task on core 0, never in a frame
 //   - no sensor: auto-rotation simply stays off and K2 works as before; the
-//     task looks for one every 10 seconds, so it can be plugged in later
+//     task looks for one every minute, so it can be plugged in later (each
+//     look without a sensor logs two I2C errors from the Arduino core: harmless)
 //   - the chip is identified (WHO_AM_I = 0x33) before anything is trusted,
 //     and readings that cannot be gravity are ignored
 #pragma once
@@ -130,7 +131,7 @@ inline void sensorTask(void*) {
         failures = 0;
         Serial.printf("[DASH] accelerometer found at 0x%02X\n", address);
       } else {
-        vTaskDelay(pdMS_TO_TICKS(10000));  // look again in a while: it may be plugged in later
+        vTaskDelay(pdMS_TO_TICKS(60000));  // look again in a while: it may be plugged in later
         continue;
       }
     }

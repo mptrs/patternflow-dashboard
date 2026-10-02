@@ -61,7 +61,7 @@ Upload them on the same page, `http://patternflow.local/dashboard`. Pick a GIF a
 
 ### Automatic rotation (optional accelerometer)
 
-With an accelerometer the dashboard turns with the panel: portrait, landscape, and either way up. Patternflow's own patterns are drawn for one fixed way up, so they can only turn 180 degrees. They do that when the panel hangs upside down (switch it off on the settings page). Without the sensor nothing changes: K2 rotates by hand. The panel looks for a sensor every 10 seconds, so you can plug one in later without restarting.
+With an accelerometer the dashboard turns with the panel: portrait, landscape, and either way up. Patternflow's own patterns are drawn for one fixed way up, so they can only turn 180 degrees. They do that when the panel hangs upside down (switch it off on the settings page). Without the sensor nothing changes: K2 rotates by hand. The panel looks for a sensor every minute, so you can plug one in later without restarting.
 
 **Hardware:** an [Adafruit LIS3DH](https://www.adafruit.com/product/2809) (STEMMA QT) and a [STEMMA QT cable with female sockets](https://www.adafruit.com/product/4397), no soldering:
 
