@@ -1,39 +1,69 @@
 // ═══════════════════════════════════════════════════════════
 // Patternflow Dashboard - the feature
 //
-// Adds a "Dashboard" entry to the K4 pattern browser: a clock with moon
-// phase, weather, forecast and world clocks. This file only wires the
-// feature into the core (the descriptor); the screens live in
-// preset_dashboard.h.
-//
-// Lives outside the Patternflow tree and is copied in by build.sh, so it
-// never edits a core file.
+// Wires the dashboard into the Patternflow core without editing it:
+//   - setup:       load settings, start the core clock (NTP + timezone)
+//   - onNetwork:   the settings page /dashboard, and a first weather fetch
+//   - loop:        weather refresh (fetched on core 0, never blocks a frame)
+//                  and remembering which pattern ran before the dashboard
+//   - takePattern: K4 click on the dashboard goes back to that pattern
+// The screens themselves are the "Dashboard" pattern in preset_dashboard.h.
 //
 // License: MIT
 // ═══════════════════════════════════════════════════════════
 #pragma once
+#include <string.h>
 #include "../pf_feature.h"
 #include "../../src/core_clock.h"
 #include "dashboard_config.h"
+#include "dash_http.h"
+#include "dash_state.h"
+#include "dash_weather.h"
 
 namespace PFFeatureDashboard {
 
 inline void setup() {
-  // Start NTP + local time. The core clock costs nothing until a feature asks.
+  DashWeather::loadSettings();
+  DashState::load();
   PatternflowClock::beginSyncTz(DASH_TZ);
+  Serial.printf("[DASH] ready, location %s\n", DashWeather::hasLocation() ? DashWeather::place : "not set");
+}
+
+inline void onNetwork() {
+  static bool routes = false;
+  if (!routes) {
+    DashHttp::registerRoutes();
+    routes = true;
+  }
+  DashWeather::requestFetch();
+}
+
+inline void loop(const PFFeatureFrame& frame) {
+  DashWeather::tick();
+  if (frame.patternName && strcmp(frame.patternName, "Dashboard") != 0 && frame.patternIndex >= 0) {
+    DashState::previousPattern = frame.patternIndex;
+  }
+}
+
+inline bool takePattern(int* idx) {
+  if (!DashState::wantBack) return false;
+  DashState::wantBack = false;
+  if (DashState::previousPattern < 0) return false;
+  *idx = DashState::previousPattern;
+  return true;
 }
 
 inline const PFFeature descriptor = {
     "dashboard",   // name
     "dashboard",   // cap string in /api/status
     setup,
-    nullptr,       // onNetwork
-    nullptr,       // loop
+    onNetwork,
+    loop,
     nullptr,       // observeFrame
     nullptr,       // fillInput
     nullptr,       // onUserInput
     nullptr,       // claimsPattern
-    nullptr,       // takePattern
+    takePattern,
     nullptr,       // onSleep
     nullptr,       // requestSleep
     nullptr,       // shortName
@@ -41,6 +71,9 @@ inline const PFFeature descriptor = {
     nullptr,       // setRuntimeEnabled
     nullptr,       // appendStatus
     nullptr,       // drawOverlay
+    "/dashboard",  // navPath - the console header link
+    "Dashboard",   // navLabel
+    "Location for the dashboard's weather screens.",
 };
 
 }  // namespace PFFeatureDashboard

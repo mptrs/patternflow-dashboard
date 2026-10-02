@@ -3,11 +3,11 @@
 A community edition of [Patternflow](https://github.com/engmung/Patternflow), the open-source LED synthesizer. It adds two things and changes nothing else:
 
 - **Game of Life**: a pattern you play with the four knobs. Install it like any other pattern.
-- **Dashboard** (work in progress): a clock with moon phase, weather, forecast and world clocks. It shows up as an extra entry in the K4 pattern browser.
+- **Dashboard**: a clock with moon phase, weather now, the next hours, the next days and world clocks. It shows up as an extra entry in the K4 pattern browser.
 
 <p align="center"><img src="docs/game-of-life.gif" alt="Game of Life on a 128×64 Patternflow panel: fading in, a mirrored seed, Day & Night, a world dissolving and methuselahs growing" width="512"></p>
 
-> **Status:** early. The firmware and the Game of Life pattern build and pass their tests. Neither has run on real hardware yet. The dashboard is only a big clock so far.
+> **Status:** early. Everything builds and passes its tests on a computer, with real weather data. Nothing has run on real Patternflow hardware yet.
 
 ## How it relates to Patternflow
 
@@ -31,6 +31,28 @@ Cells fade in when they are born, shift color as they age and leave a trail when
 **Try it without hardware:** paste [`patterns/game-of-life/game-of-life.js`](patterns/game-of-life/game-of-life.js) into the [Patternflow Live Editor](https://patternflow.work/pattern).
 
 **Install it on a panel:** download `game_of_life.pfm` from the [releases](../../releases) and drop it on your panel's patterns page (`http://patternflow.local/patterns`).
+
+## Dashboard
+
+<p align="center"><img src="docs/dashboard-portrait.png" alt="The dashboard screens in portrait: clock with moon, weather now, next hours, next days, world clocks, and the message when no location is set" width="100%"></p>
+
+Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, the next hours, the next four days and world clocks (10 s each). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
+
+| Knob | Turn | Press |
+|---|---|---|
+| **K1** | previous / next screen (stays there for a minute) | automatic rotation on / off |
+| **K2** | orientation: portrait, landscape, or either upside down | |
+| **K4** | | back to the pattern you had before the dashboard |
+
+**Set your location** at `http://patternflow.local/dashboard`: type a city, pick it from the list. The browser looks the place up; the panel only stores its coordinates, in its own settings space. Weather comes from [Open-Meteo](https://open-meteo.com/) (free, no API key) every 15 minutes. The fetch runs on the ESP32's second core, so the panel never stutters while it loads.
+
+The weather icons are drawn from shapes rather than bitmaps, so they stay sharp at 64, 32 and 12 pixels. The home timezone is Central European Time with daylight saving (`DASH_TZ` in `feature/dashboard/dashboard_config.h`). The world clocks are in the same file.
+
+<details><summary>Landscape layouts</summary>
+
+![The dashboard screens in landscape, and the clock upside down](docs/dashboard-landscape.png)
+
+</details>
 
 ## Installing the edition
 
@@ -60,7 +82,7 @@ Releases are built by GitHub Actions: push a tag such as `v0.2.0` and the firmwa
 
 | Path | What it is |
 |---|---|
-| `feature/dashboard/` | the Patternflow feature: copied into `firmware/patternflow/features/` at build time |
+| `feature/dashboard/` | the Patternflow feature: copied into `firmware/patternflow/features/` at build time. `preset_dashboard.h` has the screens, `dash_weather.h` the Open-Meteo fetch, `dash_icons.h` the icons, `dash_http.h` the settings page |
 | `edition/` | the edition's two files: which features it carries, and its name and version |
 | `patterns/` | patterns, each as a C++ header (for the panel) and a JavaScript twin (for the Live Editor) |
 | `build.sh` | fetches Patternflow, adds our files, builds firmware and patterns |
