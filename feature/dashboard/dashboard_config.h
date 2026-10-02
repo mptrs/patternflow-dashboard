@@ -19,15 +19,6 @@ constexpr int SECONDS_MANUAL_HOLD = 60;
 constexpr uint32_t WEATHER_EVERY_MS = 15UL * 60UL * 1000UL;
 constexpr uint32_t WEATHER_RETRY_MS = 60UL * 1000UL;
 
-// World clocks: name (max ~8 letters fits portrait), standard UTC offset in
-// hours, daylight saving rule (see dash_tz.h).
-struct WorldClock { const char* name; float utcOffset; char rule; };
-constexpr WorldClock WORLD_CLOCKS[] = {
-    {"NEW YORK", -5, 'U'},
-    {"LONDON", 0, 'E'},
-    {"TOKYO", 9, 0},
-    {"SYDNEY", 10, 'A'},
-};
-constexpr int WORLD_CLOCK_COUNT = sizeof(WORLD_CLOCKS) / sizeof(WORLD_CLOCKS[0]);
+// World clocks are set on the settings page; the defaults are in dash_clocks.h.
 
 }  // namespace DashConfig

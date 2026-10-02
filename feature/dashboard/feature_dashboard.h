@@ -21,6 +21,7 @@
 #include "../../src/core_mem.h"
 #include "dashboard_config.h"
 #include "dash_accel.h"
+#include "dash_clocks.h"
 #include "dash_http.h"
 #include "dash_night.h"
 #include "dash_state.h"
@@ -32,6 +33,7 @@ inline void setup() {
   DashWeather::loadSettings();
   DashState::load();
   DashNight::load();
+  DashClocks::load();
   DashAccel::begin();
   PatternflowClock::beginSyncTz(DASH_TZ);
   Serial.printf("[DASH] ready, location %s\n", DashWeather::hasLocation() ? DashWeather::place : "not set");

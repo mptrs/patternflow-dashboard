@@ -47,7 +47,13 @@ Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: c
 
 **Set your location** at `http://patternflow.local/dashboard`: type a city, pick it from the list. The browser looks the place up; the panel only stores its coordinates, in its own settings space. Weather comes from [Open-Meteo](https://open-meteo.com/) (free, no API key) every 15 minutes. The fetch runs on the ESP32's second core, so the panel never stutters while it loads.
 
-The weather icons are drawn from shapes rather than bitmaps, so they stay sharp at 64, 32 and 12 pixels. The home timezone is Central European Time with daylight saving (`DASH_TZ` in `feature/dashboard/dashboard_config.h`). The world clocks are in the same file.
+The weather icons are drawn from shapes rather than bitmaps, so they stay sharp at 64, 32 and 12 pixels. The home timezone is Central European Time with daylight saving (`DASH_TZ` in `feature/dashboard/dashboard_config.h`).
+
+### World clocks
+
+Up to four, set on `http://patternflow.local/dashboard`: search a city, rename it if you like (up to 10 characters), save. With no clocks the screen is skipped.
+
+The panel has no time zone database, so the page derives each city's daylight saving rule from your browser's database. It finds the two switch moments of the year and describes them the way a POSIX TZ rule does ("last Sunday of September, 2:00"), checking that the description holds for the next seven years. The panel then works the time out by itself, without internet. Tested against the tz database for all 416 zones, every half hour from 2025 to 2030: 410 match exactly. Morocco (Casablanca, El Aaiún) switches around Ramadan, which no fixed rule can describe. Its clock keeps standard time, and the page says so. Palestine (Gaza, Hebron) is partly tied to Ramadan too, so in some years its clock is an hour off for about two weeks. The other two differences (Edmonton, Vancouver) are where two editions of the tz database disagree after a 2026 rule change, not errors in the rule.
 
 ### GIFs
 

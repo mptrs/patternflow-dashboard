@@ -20,7 +20,9 @@ ROOT = Path(__file__).resolve().parent.parent
 STORE = ROOT / ".mock_panel"
 STORE.mkdir(exist_ok=True)
 PAGE = re.search(r'R"HTML\((.*?)\)HTML"', (ROOT / "feature/dashboard/dash_http.h").read_text(), re.S).group(1)
-state = {"place": "", "lat": 0.0, "lon": 0.0, "night": {"on": True, "start": 22 * 60, "end": 8 * 60}}
+state = {"place": "", "lat": 0.0, "lon": 0.0, "night": {"on": True, "start": 22 * 60, "end": 8 * 60},
+         "clocks": "NEW YORK|-300,60,3.2.0/120,11.1.0/120|America/New_York\nLONDON|0,60,3.5.0/60,10.5.0/120|Europe/London\n"
+                   "TOKYO|540,0|Asia/Tokyo\nSYDNEY|600,60,10.1.0/120,4.1.0/180|Australia/Sydney\n"}
 # No accelerometer on a pretend panel (pass --accel to pretend there is one, hanging upright)
 accel = {"present": "--accel" in sys.argv, "auto": True, "flip": True, "orientation": 1, "sensed": 1, "g": [1.0, 0.02, 0.04]}
 
@@ -65,6 +67,14 @@ class Handler(BaseHTTPRequestHandler):
             if "auto" in f: accel["auto"] = f["auto"] == "1"
             if "flip" in f: accel["flip"] = f["flip"] == "1"
             return self.send(200, json.dumps(accel))
+        if url.path == "/api/dashboard/clocks":
+            f = {k: v[0] for k, v in parse_qs(body.decode(), keep_blank_values=True).items()}
+            lines = [l for l in f.get("clocks", "").split("\n") if l]
+            ok = [l for l in lines if re.fullmatch(r"[ -~]{1,10}\|-?\d+,\d+(,\d+\.\d\.\d/-?\d+,\d+\.\d\.\d/-?\d+)?\|[A-Za-z0-9/_+-]{0,40}", l)]
+            if len(ok) != len(lines) or len(lines) > 4:
+                return self.send(400, '{"error":"some clocks could not be read"}')
+            state["clocks"] = "".join(l + "\n" for l in lines)
+            return self.send(200, json.dumps({"ok": True, "count": len(lines)}))
         if url.path == "/api/dashboard/night":
             f = {k: v[0] for k, v in parse_qs(body.decode()).items()}
             hm = lambda s: int(s[:2]) * 60 + int(s[3:5])

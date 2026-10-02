@@ -55,4 +55,44 @@ inline int32_t utcOffset(int64_t unix, float stdHours, char rule) {
   return dst ? std + 3600 : std;
 }
 
+// ---------------------------------------------------------------- any zone
+// A zone as the browser derives it from the time zone database (see the
+// settings page): standard offset and DST shift in minutes, and the two
+// switch moments as "month, week (5 = last), weekday (0 = Sunday), minutes",
+// in local time before the switch - the same idea as a POSIX TZ "M" rule.
+// Minutes may lie outside 0..1440 ("Saturday 24:00", "Sunday minus two days").
+struct Zone {
+  int16_t stdMin = 0;  // standard offset from UTC, minutes east
+  int16_t dstMin = 0;  // extra minutes during DST; 0 = no DST
+  uint8_t sm = 0, sw = 0, sd = 0;
+  int16_t st = 0;      // DST starts: month, week, weekday, local standard time
+  uint8_t em = 0, ew = 0, ed = 0;
+  int16_t et = 0;      // DST ends: month, week, weekday, local daylight time
+};
+
+inline int daysInMonth(int y, int m) {
+  static const int dim[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  return m == 2 && ((y % 4 == 0 && y % 100 != 0) || y % 400 == 0) ? 29 : dim[m - 1];
+}
+
+// Day of the month of the n-th (5 = last) weekday (0 = Sunday).
+inline int nthWeekday(int y, int m, int week, int wday) {
+  const int firstWday = (weekday(y, m, 1) + 1) % 7;  // weekday() is Monday-based
+  int day = 1 + (wday - firstWday + 7) % 7 + 7 * (week - 1);
+  while (day > daysInMonth(y, m)) day -= 7;
+  return day;
+}
+
+inline int32_t utcOffset(int64_t unix, const Zone& z) {
+  const int32_t std = z.stdMin * 60;
+  if (!z.dstMin || !z.sm || !z.em) return std;
+  const int32_t dst = std + z.dstMin * 60;
+  const int y = 1970 + (int)(((unix + std) / 86400) * 400 / 146097);
+  const int64_t start = daysFromCivil(y, z.sm, nthWeekday(y, z.sm, z.sw, z.sd)) * 86400 + (int64_t)z.st * 60 - std;
+  const int64_t end = daysFromCivil(y, z.em, nthWeekday(y, z.em, z.ew, z.ed)) * 86400 + (int64_t)z.et * 60 - dst;
+  const bool inDst = start < end ? (start <= unix && unix < end)    // northern hemisphere
+                                 : !(end <= unix && unix < start); // southern: DST over New Year
+  return inDst ? dst : std;
+}
+
 }  // namespace DashTz

@@ -19,6 +19,7 @@
 #include "../../src/core_mem.h"
 #include "dashboard_config.h"
 #include "dash_gfx.h"
+#include "dash_clocks.h"
 #include "dash_gifs.h"
 #include "dash_icons.h"
 #include "dash_state.h"
@@ -227,10 +228,10 @@ static void drawWorld() {
   }
   const int64_t homeDay = DashTz::daysFromCivil(home.tm_year + 1900, home.tm_mon + 1, home.tm_mday);
   char hm[8];
-  const int n = DashConfig::WORLD_CLOCK_COUNT < 4 ? DashConfig::WORLD_CLOCK_COUNT : 4;
+  const int n = DashClocks::count;
   for (int i = 0; i < n; i++) {
-    const auto& c = DashConfig::WORLD_CLOCKS[i];
-    const time_t local = (time_t)(now + DashTz::utcOffset(now, c.utcOffset, c.rule));
+    const char* name = DashClocks::names[i];
+    const time_t local = (time_t)(now + DashTz::utcOffset(now, DashClocks::zones[i]));
     struct tm t;
     gmtime_r(&local, &t);
     snprintf(hm, sizeof hm, "%02d:%02d", t.tm_hour, t.tm_min);
@@ -238,7 +239,7 @@ static void drawWorld() {
     const RGB dot = (t.tm_hour >= 7 && t.tm_hour < 19) ? YELLOW : BLUE;  // day or night over there
     if (portrait()) {
       const int y = i * 32;
-      text(SMALL, c.name, 32, y + 2, GREY, 1, 'c');
+      text(SMALL, name, 32, y + 2, GREY, 1, 'c');
       fillRect(1, y + 16, 3, 5, dot);
       text(LARGE, hm, 33, y + 12, WHITE, 1, 'c');
       if (dayDiff) text(SMALL, dayDiff > 0 ? "+1" : "-1", 63, y + 23, CYAN, 1, 'r');
@@ -246,7 +247,7 @@ static void drawWorld() {
     } else {
       const int y = i * 16;
       fillRect(1, y + 6, 3, 4, dot);
-      text(LARGE, c.name, 7, y + 4, GREY);
+      text(LARGE, name, 7, y + 4, GREY);
       if (dayDiff) text(SMALL, dayDiff > 0 ? "+1" : "-1", 86, y + 5, CYAN);
       text(LARGE, hm, 127, y + 4, WHITE, 1, 'r');
       if (i < n - 1) dotsH(y + 15, 1, 127);
@@ -260,6 +261,7 @@ static void moveSlot(int step) {
   for (int tries = 0; tries < SLOTS; tries++) {
     slot = ((slot + step) % SLOTS + SLOTS) % SLOTS;
     screen = SEQUENCE[slot];
+    if (screen == WORLD && DashClocks::count == 0) continue;  // no clocks set: skip
     if (screen != GIF) break;
     gifOrientation = DashState::orientation;
     if (DashGifs::player.start(portraitFor(gifOrientation))) break;

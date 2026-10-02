@@ -9,6 +9,7 @@
 #include "../../src/core_loop_sync.h"
 #include "../../src/core_patterns_http.h"
 #include "dash_accel.h"
+#include "dash_clocks.h"
 #include "dash_gifs.h"
 #include "dash_state.h"
 #include "dash_night.h"
@@ -30,6 +31,11 @@ label{display:inline-flex;gap:.4rem;align-items:center;margin:.3rem 1rem .3rem 0
 <h2>Location</h2><p class="muted">For the weather screens.</p>
 <p>Now: <b id="now">…</b> <span id="wx" class="muted"></span></p>
 <form id="f"><input id="q" placeholder="City, e.g. Utrecht" required> <button>Search</button></form><ul id="r"></ul>
+
+<h2>World clocks</h2><p class="muted">Up to four, on the dashboard's world clock screen. Daylight saving time comes from your browser's time zone database.</p>
+<ul id="clocks"></ul>
+<form id="cf"><input id="cq" placeholder="Add a city, e.g. Tokyo"> <button>Search</button></form><ul id="cr"></ul>
+<p><button id="csave">Save clocks</button> <span id="cmsg" class="muted"></span></p>
 
 <h2>Night mode</h2><p class="muted">The whole panel sleeps between these times. Any knob wakes it; at night it goes back to sleep after 10 minutes.</p>
 <form id="nf"><label><input type="checkbox" id="non"> On</label>
@@ -58,6 +64,7 @@ const hm=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2
 async function status(first){const s=await (await fetch('/api/dashboard')).json();
  $('now').textContent=s.place?`${s.place} (${s.lat.toFixed(3)}, ${s.lon.toFixed(3)})`:'not set';
  $('wx').textContent=s.error?`last fetch: ${s.error}`:(s.updated?`weather ${s.updated} s old`:'');
+ if(first){clocks=s.clocks.split('\n').filter(Boolean).map(l=>{const[name,spec,label]=l.split('|');return{name,spec,label};});drawClocks();}
  if(first){$('non').checked=s.night.on;$('ns').value=hm(s.night.start);$('ne').value=hm(s.night.end);}
  $('space').textContent=`${(s.free/1048576).toFixed(1)} MB free.`;
  $('gifs').innerHTML='';for(const g of s.gifs){const li=document.createElement('li');li.innerHTML=`<span class="grow">${g}</span>`;
@@ -73,6 +80,63 @@ $('f').onsubmit=async e=>{e.preventDefault();$('r').innerHTML='';
 $('nf').onsubmit=async e=>{e.preventDefault();
  const r=await fetch('/api/dashboard/night',{method:'POST',body:new URLSearchParams({on:$('non').checked?1:0,start:$('ns').value,end:$('ne').value})});
  $('nmsg').textContent=r.ok?'Saved.':'Could not save.';};
+
+// ---- world clocks: the zone rule is derived from the browser's time zone database
+function zoneSpec(zone) {
+  const fmt = new Intl.DateTimeFormat('en-US', {timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric'});
+  const off = t => { const p = fmt.formatToParts(new Date(t)), g = k => +p.find(x => x.type === k).value;
+    return Math.round((Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute')) - Math.floor(t / 60000) * 60000) / 60000); };
+  const y = new Date().getUTCFullYear(), t0 = Date.UTC(y, 0, 1), t1 = Date.UTC(y + 1, 0, 1), changes = [];
+  let prev = off(t0);
+  for (let t = t0 + 3600e3; t <= t1; t += 3600e3) {
+    const o = off(t); if (o === prev) continue;
+    let lo = t - 3600e3, hi = t;  // narrow the switch down to the minute
+    while (hi - lo > 60e3) { const mid = lo + Math.floor((hi - lo) / 120e3) * 60e3; if (off(mid) === prev) lo = mid; else hi = mid; }
+    changes.push({t: hi, from: prev, to: o}); prev = o;
+  }
+  const s = changes.find(c => c.to > c.from), e = changes.find(c => c.to < c.from);
+  if (!s || !e) return `${prev},0`;  // no daylight saving time
+  const std = Math.min(s.from, e.to), dst = s.to - s.from;
+  const dim = (yy, m) => new Date(Date.UTC(yy, m, 0)).getUTCDate();
+  const when = (yy, r, from) => { const firstWd = new Date(Date.UTC(yy, r.m - 1, 1)).getUTCDay();
+    let d = 1 + (r.wd - firstWd + 7) % 7 + 7 * (r.w - 1); while (d > dim(yy, r.m)) d -= 7;
+    return Date.UTC(yy, r.m - 1, d) + (r.min - from) * 60e3; };
+  const holds = (r, c) => { for (let yy = y; yy < y + 7; yy++) { const t = when(yy, r, c.from); if (off(t - 60e3) !== c.from || off(t) !== c.to) return false; } return true; };
+  const rule = c => { const l = new Date(c.t + c.from * 60e3), min = l.getUTCHours() * 60 + l.getUTCMinutes();
+    for (const k of [0, -1, 1, -2, 2, -3, 3]) {  // describe the moment from a weekday k days away
+      const a = new Date(l.getTime() + k * 864e5); if (a.getUTCMonth() !== l.getUTCMonth()) continue;
+      const m = a.getUTCMonth() + 1, d = a.getUTCDate(), wd = a.getUTCDay();
+      const weeks = d + 7 > dim(a.getUTCFullYear(), m) ? [5, Math.ceil(d / 7)] : [Math.ceil(d / 7)];
+      for (const w of weeks) { const r = {m, w, wd, min: min - k * 1440}; if (holds(r, c)) return `${m}.${w}.${wd}/${r.min}`; }
+    }
+    return null; };
+  const rs = rule(s), re = rule(e);
+  if (!rs || !re) return null;  // a rule this format cannot express
+  return `${std},${dst},${rs},${re}`;
+}
+let clocks=null;
+const clockTime=z=>{try{return new Intl.DateTimeFormat('en-GB',{timeZone:z,hour:'2-digit',minute:'2-digit'}).format(new Date());}catch(e){return '';}};
+function drawClocks(){$('clocks').innerHTML='';clocks.forEach((c,i)=>{const li=document.createElement('li');
+ const n=document.createElement('input');n.value=c.name;n.maxLength=10;n.style.width='8rem';n.oninput=()=>{c.name=n.value.toUpperCase().replace(/[^ -~]|["\\|]/g,'');};
+ const t=document.createElement('span');t.className='grow muted';t.textContent=`${c.label||'?'} ${c.label?clockTime(c.label):''}${c.note?' · '+c.note:''}`;
+ const b=document.createElement('button');b.className='del';b.textContent='Remove';b.onclick=()=>{clocks.splice(i,1);drawClocks();};
+ li.append(n,t,b);$('clocks').append(li);});
+ if(!clocks.length)$('clocks').innerHTML='<li class="muted">No world clocks: the screen is skipped.</li>';
+ $('cq').disabled=clocks.length>=4;}
+$('cf').onsubmit=async e=>{e.preventDefault();$('cr').innerHTML='';
+ const j=await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=5&name='+encodeURIComponent($('cq').value))).json();
+ for(const p of j.results||[]){const b=document.createElement('button');b.textContent=[p.name,p.admin1,p.country_code].filter(Boolean).join(', ')+' · '+p.timezone;
+  b.onclick=()=>{let spec=zoneSpec(p.timezone),note='';
+   if(!spec){const f=new Intl.DateTimeFormat('en-US',{timeZone:p.timezone,timeZoneName:'longOffset'}).formatToParts(new Date()).find(x=>x.type==='timeZoneName').value;
+    const m=f.match(/([+-])(\d+):?(\d*)/);spec=`${m?(m[1]==='-'?-1:1)*(+m[2]*60+(+m[3]||0)):0},0`;note='daylight saving time not followed';}
+   clocks.push({name:p.name.toUpperCase().normalize('NFD').replace(/[^ -~]|["\\|]/g,'').slice(0,10),spec,label:p.timezone,note});
+   $('cr').innerHTML='';$('cq').value='';drawClocks();};
+  const li=document.createElement('li');li.append(b);$('cr').append(li);}
+ if(!(j.results||[]).length)$('cr').textContent='Nothing found.';};
+$('csave').onclick=async()=>{const text=clocks.map(c=>`${c.name}|${c.spec}|${c.label}`).join('\n');
+ const r=await fetch('/api/dashboard/clocks',{method:'POST',body:new URLSearchParams({clocks:text})});
+ $('cmsg').textContent=r.ok?'Saved.':'Could not save: '+await r.text();};
+setInterval(()=>clocks&&drawClocks(),30000);
 
 // ---- GIF decoding (GIF87a/89a: LZW, local palettes, transparency, disposal, interlacing)
 function lzw(data,minCode,n){const out=new Uint8Array(n);let op=0;const clear=1<<minCode,eoi=clear+1;let size=minCode+1,next=eoi+1;
@@ -171,14 +235,18 @@ inline void handlePage() {
 
 inline void handleGet() {
   const bool has = DashWeather::hasLocation();
-  char head[260];
+  // The clock text is JSON-safe apart from its newlines (names and labels are filtered on the way in)
+  String clocksJson;
+  (void)PFLoopSync::run([&] { clocksJson = DashClocks::format(); });
+  clocksJson.replace("\n", "\\n");
+  char head[260 + 4 * 128];
   snprintf(head, sizeof head,
            "{\"place\":\"%s\",\"lat\":%.4f,\"lon\":%.4f,\"updated\":%u,\"error\":\"%s\","
-           "\"night\":{\"on\":%s,\"start\":%d,\"end\":%d},\"free\":%u,\"gifs\":[",
+           "\"night\":{\"on\":%s,\"start\":%d,\"end\":%d},\"free\":%u,\"clocks\":\"%s\",\"gifs\":[",
            has ? DashWeather::place : "", has ? DashWeather::lat : 0.0f, has ? DashWeather::lon : 0.0f,
            DashWeather::updatedAtMs ? (unsigned)((millis() - DashWeather::updatedAtMs) / 1000) : 0u,
            DashWeather::lastError, DashNight::enabled ? "true" : "false", DashNight::startMin, DashNight::endMin,
-           (unsigned)(FFat.totalBytes() - FFat.usedBytes()));
+           (unsigned)(FFat.totalBytes() - FFat.usedBytes()), clocksJson.c_str());
   String json = head;
   // The clip list belongs to the loop task: copy it there.
   String list;
@@ -216,6 +284,26 @@ inline void handleLocation() {
   DashWeather::saveSettings(la, lo, clean.c_str());
   DashWeather::requestFetch();
   handleGet();
+}
+
+inline void handleClocks() {
+  const String text = server().arg("clocks");
+  if (text.length() > 4 * 128) {
+    sendJson(400, "{\"error\":\"too long\"}");
+    return;
+  }
+  int n = 0, lines = 0;
+  for (size_t i = 0; i < text.length(); i++) lines += text[i] == '\n';
+  if (text.length()) lines++;
+  (void)PFLoopSync::run([&] {
+    n = DashClocks::parseAll(text.c_str());
+    DashClocks::save();
+  });
+  if (n != lines && lines <= DashClocks::MAX) {
+    sendJson(400, "{\"error\":\"some clocks could not be read\"}");
+    return;
+  }
+  sendJson(200, String("{\"ok\":true,\"count\":") + n + "}");
 }
 
 inline void handleNight() {
@@ -363,6 +451,7 @@ inline void registerRoutes() {
   server().on("/api/dashboard", HTTP_GET, handleGet);
   server().on("/api/dashboard", HTTP_POST, handleLocation);
   server().on("/api/dashboard/night", HTTP_POST, handleNight);
+  server().on("/api/dashboard/clocks", HTTP_POST, handleClocks);
   server().on("/api/dashboard/gif", HTTP_POST, handleUploadDone, handleUpload);
   server().on("/api/dashboard/gif/delete", HTTP_POST, handleDelete);
 }
