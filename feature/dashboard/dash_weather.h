@@ -214,8 +214,12 @@ inline bool tlsFits() {
          heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) >= TLS_LARGEST;
 }
 
-inline void fetchTask(void* arg) {
-  const bool secure = arg != nullptr;
+// The fetch itself. Its own function on purpose: a task ends with
+// vTaskDelete(nullptr), which never returns, so objects living in the task
+// function would never be destroyed. The clients below hold internal RAM
+// (socket buffers, TLS context); leaked on every fetch, they starved the
+// network stack within hours.
+inline bool fetchOnce(bool secure) {
   char url[512];
   buildUrl(url, sizeof url, secure);
   WiFiClientSecure tls;
@@ -237,6 +241,12 @@ inline void fetchTask(void* arg) {
   } else {
     snprintf(lastError, sizeof lastError, "could not connect");
   }
+  return ok;
+}
+
+inline void fetchTask(void* arg) {
+  const bool secure = arg != nullptr;
+  const bool ok = fetchOnce(secure);  // everything it made is gone again here
   if (ok) {
     lastError[0] = 0;
     incomingReady = true;

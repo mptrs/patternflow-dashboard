@@ -102,7 +102,9 @@ inline int playing_ = 0;                 // clips[playing_] is the one on screen
 inline volatile int loadState = 0;       // 0 idle, 1 loading, 2 ready, 3 failed
 inline Clip& loaded() { return clips[1 - playing_]; }
 
-inline void loadTask(void*) {
+// The reading, in its own function so the File is closed and destroyed
+// before the task deletes itself (vTaskDelete(nullptr) never returns).
+inline bool loadOnce() {
   Clip& c = loaded();
   bool ok = false;
   char p[64];
@@ -129,7 +131,11 @@ inline void loadTask(void*) {
     }
   }
   if (f) f.close();
-  loadState = ok ? 2 : 3;
+  return ok;
+}
+
+inline void loadTask(void*) {
+  loadState = loadOnce() ? 2 : 3;
   vTaskDelete(nullptr);
 }
 
