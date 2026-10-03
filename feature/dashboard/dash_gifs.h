@@ -225,4 +225,23 @@ inline void removeClip(const char* name) {
   listDirty = true;
 }
 
+// Renames both files of a clip; nullptr when done, else what went wrong.
+inline const char* renameClip(const char* from, const char* to) {
+  if (strcmp(from, to) == 0) return nullptr;
+  char a[64], b[64];
+  path(b, sizeof b, to, true);
+  if (FFat.exists(b)) return "that name is taken";
+  path(a, sizeof a, from, true);
+  if (!FFat.exists(a)) return "no such GIF";
+  if (loadState == 1 && strcmp(loaded().name, from) == 0) return "it is being loaded: try again in a second";
+  forget(from);
+  if (!FFat.rename(a, b)) return "could not rename";
+  path(a, sizeof a, from, false);
+  path(b, sizeof b, to, false);
+  FFat.rename(a, b);
+  if (strcmp(player.name, from) == 0) strcpy(player.name, to);
+  listDirty = true;
+  return nullptr;
+}
+
 }  // namespace DashGifs

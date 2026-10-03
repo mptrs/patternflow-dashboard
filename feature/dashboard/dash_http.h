@@ -210,6 +210,21 @@ inline void handleDelete() {
   sendJson(200, "{\"ok\":true}");
 }
 
+inline void handleRename() {
+  const String from = server().arg("name"), to = server().arg("to");
+  if (!DashGifs::validName(from.c_str()) || !DashGifs::validName(to.c_str())) {
+    sendJson(400, "{\"error\":\"names: a-z, 0-9 and - only\"}");
+    return;
+  }
+  const char* error = nullptr;
+  (void)PFLoopSync::run([&] { error = DashGifs::renameClip(from.c_str(), to.c_str()); });
+  if (error) {
+    sendJson(400, String("{\"error\":\"") + error + "\"}");
+    return;
+  }
+  sendJson(200, "{\"ok\":true}");
+}
+
 inline void handleOrientationGet() {
   char json[200];
   const float x = DashAccel::gx, y = DashAccel::gy, z = DashAccel::gz;
@@ -254,6 +269,7 @@ inline void registerRoutes() {
   server().on("/api/dashboard/clocks", HTTP_POST, handleClocks);
   server().on("/api/dashboard/gif", HTTP_POST, handleUploadDone, handleUpload);
   server().on("/api/dashboard/gif/delete", HTTP_POST, handleDelete);
+  server().on("/api/dashboard/gif/rename", HTTP_POST, handleRename);
 }
 
 }  // namespace DashHttp

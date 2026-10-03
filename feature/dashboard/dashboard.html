@@ -77,6 +77,9 @@ ul.picks li{border-bottom:none;padding:2px 0}
 button.del{font:inherit;font-size:11px;color:var(--muted);background:none;
 border:1px solid var(--rule);border-radius:2px;padding:2px 8px;cursor:pointer;white-space:nowrap}
 button.del:hover{border-color:var(--led);color:var(--led)}
+/* Upload progress: Patternflow's own bar (patterns page) */
+.qbar{height:2px;background:var(--rule-soft);margin-top:8px}
+.qbar i{display:block;height:100%;width:0;background:var(--led);transition:width .2s}
 .drop{display:block;border:1px dashed var(--rule);border-radius:3px;padding:22px 18px;text-align:center;
 background:rgba(255,255,255,.02);transition:border-color .15s,background .15s;cursor:pointer}
 .drop.over{border-color:var(--led);background:rgba(255,92,46,.06)}
@@ -181,6 +184,7 @@ html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
         <div class="row"><label></label><button type="button" class="switch" id="split"><i></i><span>Split wide GIFs in portrait: left half on top</span></button></div>
         <div class="row"><label for="name">Name</label><input id="name" type="text" class="grow" maxlength="24" placeholder="e.g. nyan-cat"></div>
         <div class="actions"><button type="button" class="go" id="up" disabled>Upload</button><span class="msg" id="gmsg"></span></div>
+        <div class="qbar" id="gbar" hidden><i></i></div>
       </div>
       <h2 style="margin-top:20px">On the panel</h2>
       <ul id="gifs"></ul>
@@ -221,12 +225,14 @@ function fill(s){
     $('ns').value=night.start;$('ne').value=night.end;$('non').classList.toggle('on',night.on);
   }
   drawClocks();
+  if(renaming)return;  // not while a name is being edited
   const list=$('gifs');list.innerHTML='';
-  for(const g of s.gifs){const li=document.createElement('li'),n=document.createElement('span'),b=document.createElement('button');
+  for(const g of s.gifs){const li=document.createElement('li'),n=document.createElement('span'),b=document.createElement('button'),rn=document.createElement('button');
     n.className='nm';n.textContent=g;b.className='del';b.textContent='Delete';
+    rn.className='del';rn.textContent='Rename';rn.onclick=()=>renameRow(li,g);
     b.onclick=()=>{if(!confirm('Delete '+g+' from the panel?'))return;li.style.opacity=.3;
       post('/api/dashboard/gif/delete?name='+g).then(()=>{say('deleted '+g,'ok');dash.now()},e=>say(e.message,'err'))};
-    li.append(n,b);list.append(li);}
+    li.append(n,rn,b);list.append(li);}
   if(!s.gifs.length)list.innerHTML='<li class="empty">No GIFs yet: the dashboard goes straight to the next screen.</li>';
 }
 const dash=PF.poll('/api/dashboard',10000,function(d){if(d)fill(d)});
@@ -414,6 +420,22 @@ async function pick(f){if(!f)return;
  $('opts').hidden=false;$('pv-empty').hidden=true;document.documentElement.classList.add('has-gif');$('pp').hidden=$('pl').hidden=false;$('split').classList.toggle('on',gif.W>=1.6*gif.H);
  $('name').value=f.name.replace(/\.gif$/i,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);
  PF.dirty=true;preview();}
+// Rename in place: the row becomes a field; Enter saves, Escape cancels
+const slug=t=>t.toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);
+let renaming=false;
+function renameRow(li,g){
+  renaming=true;li.innerHTML='';
+  const f=document.createElement('input'),ok=document.createElement('button'),no=document.createElement('button');
+  f.type='text';f.value=g;f.maxLength=24;f.className='grow';f.style.textTransform='none';
+  ok.className='del';ok.textContent='Save';no.className='del';no.textContent='Cancel';
+  const done=()=>{renaming=false;dash.now()};
+  ok.onclick=()=>{const to=slug(f.value);if(!to){say('name: a-z, 0-9 and - only','err');return;}
+    PF.busy(ok,post('/api/dashboard/gif/rename',new URLSearchParams({name:g,to})).then(()=>{say('renamed to '+to,'ok');done()},e=>say(e.message,'err')))};
+  no.onclick=done;
+  f.onkeydown=e=>{if(e.key==='Enter')ok.click();if(e.key==='Escape')done();};
+  li.append(f,ok,no);f.focus();f.select();
+}
+
 // After an upload: back to an empty form, ready for the next GIF
 function resetGif(){
   clearTimeout(anim);gif=null;clips=null;
@@ -454,9 +476,19 @@ for(const id of['fit','scale'])$(id).addEventListener('click',e=>{const b=e.targ
   $(id).querySelectorAll('.seg').forEach(x=>x.classList.toggle('on',x===b));preview();});
 $('split').onclick=()=>{$('split').classList.toggle('on');preview()};
 $('up').onclick=()=>{const name=$('name').value;if(!/^[a-z0-9-]{1,24}$/.test(name)){say('name: a-z, 0-9 and - only','err',$('gmsg'));return;}
- const send=async()=>{for(const o of['p','l']){say(`uploading ${o==='p'?'portrait':'landscape'}…`,'info',$('gmsg'));
-   const fd=new FormData();fd.append('clip',new Blob([clipBytes(clips[o])]),'clip.dgf');
-   await post(`/api/dashboard/gif?name=${name}&o=${o}`,fd);}};
- PF.busy($('up'),PF.hold(send())).then(()=>{PF.dirty=false;resetGif();say('uploaded '+name,'ok',$('umsg'));dash.now()},e=>say('upload failed: '+e.message,'err',$('gmsg')));};
+ // Both clips in one bar: XHR, because fetch cannot report upload progress
+ const parts=['p','l'].map(o=>({o,bytes:clipBytes(clips[o])})),total=parts.reduce((n,p)=>n+p.bytes.length,0);
+ const bar=$('gbar'),fill=bar.querySelector('i');bar.hidden=false;fill.style.width='0';
+ const upload=(p,before)=>new Promise((ok,fail)=>{const x=new XMLHttpRequest(),fd=new FormData();
+   fd.append('clip',new Blob([p.bytes]),'clip.dgf');
+   x.open('POST',`/api/dashboard/gif?name=${name}&o=${p.o}`);
+   x.upload.onprogress=e=>{const pct=Math.round(100*(before+e.loaded*p.bytes.length/(e.total||p.bytes.length))/total);
+     fill.style.width=pct+'%';say(`uploading… ${pct}%`,'info',$('gmsg'));};
+   x.onload=()=>{if(x.status===200)ok();else{let m='HTTP '+x.status;try{m=JSON.parse(x.responseText).error||m}catch(e){}fail(new Error(m))}};
+   x.onerror=()=>fail(new Error('connection lost'));x.ontimeout=()=>fail(new Error('timed out'));x.timeout=180000;
+   x.send(fd);});
+ const send=async()=>{let done=0;for(const p of parts){await upload(p,done);done+=p.bytes.length;}};
+ PF.busy($('up'),PF.hold(send())).then(()=>{PF.dirty=false;resetGif();bar.hidden=true;say('uploaded '+name,'ok',$('umsg'));dash.now()},
+   e=>{bar.hidden=true;say('upload failed: '+e.message,'err',$('gmsg'))});};
 </script>
 </body></html>

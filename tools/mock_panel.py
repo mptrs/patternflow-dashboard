@@ -111,6 +111,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(400, '{"error":"not a valid clip"}')
             (STORE / f"{name}.{o}.dgf").write_bytes(data)
             return self.send(200, '{"ok":true}')
+        if url.path == "/api/dashboard/gif/rename":
+            f = {k: v[0] for k, v in parse_qs(body.decode()).items()}
+            a, b = f.get("name", ""), f.get("to", "")
+            if not all(re.fullmatch(r"[a-z0-9-]{1,24}", n) for n in (a, b)):
+                return self.send(400, '{"error":"names: a-z, 0-9 and - only"}')
+            if a != b and (STORE / f"{b}.p.dgf").exists():
+                return self.send(400, '{"error":"that name is taken"}')
+            for o in "pl":
+                if (STORE / f"{a}.{o}.dgf").exists():
+                    (STORE / f"{a}.{o}.dgf").rename(STORE / f"{b}.{o}.dgf")
+            return self.send(200, '{"ok":true}')
         if url.path == "/api/dashboard/gif/delete":
             for o in "pl":
                 (STORE / f"{q.get('name', '')}.{o}.dgf").unlink(missing_ok=True)
