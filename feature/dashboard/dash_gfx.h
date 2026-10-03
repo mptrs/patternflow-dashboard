@@ -99,6 +99,32 @@ inline void text(const GFXfont* f, const char* s, int x, int y, RGB col, int k =
   }
 }
 
+// A clock face of radius r centred on pixel (cx, cy): warm by day, dark blue by night.
+inline void dial(int cx, int cy, int r, int hour, int minute, bool day) {
+  const RGB face = day ? RGB{70, 52, 12} : RGB{12, 20, 58}, rim = day ? YELLOW : BLUE;
+  for (int y = -r; y <= r; y++)
+    for (int x = -r; x <= r; x++) {
+      const float d = sqrtf((float)(x * x + y * y));
+      if (d <= r + 0.3f) px(cx + x, cy + y, d > r - 0.9f ? rim : face);
+    }
+  // marks at 12, 3, 6 and 9
+  for (int q = 0; q < 4; q++) {
+    const float a = q * (float)M_PI / 2;
+    px(cx + (int)lroundf(sinf(a) * (r - 2)), cy - (int)lroundf(cosf(a) * (r - 2)), rim);
+  }
+  auto hand = [&](float turns, float len, RGB c) {
+    const float a = turns * 2 * (float)M_PI;
+    const int steps = (int)(len * 2) + 1;
+    for (int i = 0; i <= steps; i++) {
+      const float t = len * i / steps;
+      px(cx + (int)lroundf(sinf(a) * t), cy - (int)lroundf(cosf(a) * t), c);
+    }
+  };
+  hand(((hour % 12) + minute / 60.0f) / 12, r * 0.5f, WHITE);
+  hand(minute / 60.0f, r * 0.8f, WHITE);
+  px(cx, cy, WHITE);
+}
+
 // ---------------------------------------------------------------- icons
 // An icon is a size*size RGB buffer; black pixels are transparent.
 inline void blit(const uint8_t* rgb, int size, int x, int y) {

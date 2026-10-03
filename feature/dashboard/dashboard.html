@@ -78,6 +78,8 @@ button.del{font:inherit;font-size:11px;color:var(--muted);background:none;
 border:1px solid var(--rule);border-radius:2px;padding:2px 8px;cursor:pointer;white-space:nowrap}
 button.del:hover{border-color:var(--led);color:var(--led)}
 /* Upload progress: Patternflow's own bar (patterns page) */
+/* While a GIF uploads the panel is busy with it: everything else waits */
+html.uploading .controls section:not(#gifsec),html.uploading #gifs,html.uploading #uf,html.uploading #drop,html.uploading #opts .row{opacity:.4;pointer-events:none}
 .qbar{height:2px;background:var(--rule-soft);margin-top:8px}
 .qbar i{display:block;height:100%;width:0;background:var(--led);transition:width .2s}
 .drop{display:block;border:1px dashed var(--rule);border-radius:3px;padding:22px 18px;text-align:center;
@@ -168,7 +170,7 @@ html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
       <p class="note">Hang the panel upright (portrait) and press <i>This is upright</i>. If the dashboard then reads upside down in portrait or landscape, press the matching button. Without a sensor, turn K2 on the dashboard to rotate by hand. Leave the first switch off when nothing is connected: the two pins are also the board's serial console.</p>
     </section>
 
-    <section>
+    <section id="gifsec">
       <h2>GIFs</h2>
       <p class="note bad" id="nofs" hidden>The panel's storage is not formatted yet, so GIFs cannot be saved. Format it once on the <a href="/patterns">Patterns</a> page.</p>
       <label class="drop" id="drop"><input type="file" id="file" accept="image/gif">
@@ -188,7 +190,7 @@ html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
       </div>
       <h2 style="margin-top:20px">On the panel</h2>
       <ul id="gifs"></ul>
-      <p class="note">A GIF plays after every dashboard screen: at least one loop, at most 20 seconds. The panel keeps a portrait and a landscape version.</p>
+      <p class="note">A GIF plays after every dashboard screen: always to the end of a loop, and at least 10 seconds. The panel keeps a portrait and a landscape version.</p>
     </section>
   </div>
 </div>
@@ -198,7 +200,9 @@ html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
 <script>
 function $(i){return document.getElementById(i)}
 function say(t,kind,el){PF.say(t,kind,el||$('msg'))}
+let uploading=false;
 function post(url,body){
+  if(uploading)return Promise.reject(new Error('wait until the GIF upload is done'));
   return fetch(url,{method:'POST',body:body}).then(function(r){
     return r.json().catch(function(){return {}}).then(function(d){if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d})});
 }
@@ -487,8 +491,11 @@ $('up').onclick=()=>{const name=$('name').value;if(!/^[a-z0-9-]{1,24}$/.test(nam
    x.onload=()=>{if(x.status===200)ok();else{let m='HTTP '+x.status;try{m=JSON.parse(x.responseText).error||m}catch(e){}fail(new Error(m))}};
    x.onerror=()=>fail(new Error('connection lost'));x.ontimeout=()=>fail(new Error('timed out'));x.timeout=180000;
    x.send(fd);});
+ uploading=true;document.documentElement.classList.add('uploading');
+ say('settings are locked until the upload is done','info');
+ const unlock=()=>{uploading=false;document.documentElement.classList.remove('uploading');};
  const send=async()=>{let done=0;for(const p of parts){await upload(p,done);done+=p.bytes.length;}};
- PF.busy($('up'),PF.hold(send())).then(()=>{PF.dirty=false;resetGif();bar.hidden=true;say('uploaded '+name,'ok',$('umsg'));dash.now()},
-   e=>{bar.hidden=true;say('upload failed: '+e.message,'err',$('gmsg'))});};
+ PF.busy($("up"),PF.hold(send(),{guard:true})).then(()=>{unlock();PF.dirty=false;resetGif();bar.hidden=true;say('uploaded '+name,'ok',$('umsg'));dash.now()},
+   e=>{unlock();bar.hidden=true;say('upload failed: '+e.message,'err',$('gmsg'))});};
 </script>
 </body></html>

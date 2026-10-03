@@ -35,9 +35,9 @@ Cells fade in when they are born, shift color as they age and leave a trail when
 
 ## Dashboard
 
-<p align="center"><img src="docs/dashboard-portrait.png" alt="The dashboard screens in portrait: clock with moon, weather now, next hours, next days, world clocks, and the message when no location is set" width="100%"></p>
+<p align="center"><img src="docs/dashboard-screens.png" alt="The dashboard screens, portrait above and landscape below: clock with moon, next days, next hours, weather now and world clocks with day and night clock faces" width="100%"></p>
 
-Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, the next hours, the next four days and world clocks (10 s each). A GIF plays after every screen, if you have uploaded any (at least one full loop, at most 20 s). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
+Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, the next hours (now, +3, +6, +9), the next four days and world clocks with a clock face that is warm by day and dark blue at night (10 s each). A GIF plays after every screen, if you have uploaded any (always at least one full loop, and at least 10 s). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
 
 | Knob | Turn | Press |
 |---|---|---|
@@ -89,11 +89,11 @@ python3 tools/mock_panel.py      # then open http://localhost:8765/dashboard
 
 This serves the real page (`feature/dashboard/dashboard.html`) with Patternflow's console chrome and pretends to be a panel. The page is built from Patternflow's own console pages; `build.sh` stamps and gzips it with Patternflow's `console_pages.py`. Uploaded clips land in `.mock_panel/`.
 
-<details><summary>Landscape layouts</summary>
+Pictures of the screens, drawn by the real screen code on your computer (with today's weather for Amsterdam):
 
-![The dashboard screens in landscape, and the clock upside down](docs/dashboard-landscape.png)
-
-</details>
+```bash
+python3 tools/render_screens.py docs/dashboard-screens.png    # after ./build.sh once
+```
 
 ## Installing the edition
 

@@ -38,7 +38,8 @@ enum Screen { CLOCK, WEATHER, HOURLY, FORECAST, WORLD, GIF, SCREEN_COUNT };
 // The rotation: a GIF after every screen (GIF slots are skipped when there are none).
 static const int SEQUENCE[] = {CLOCK, GIF, WEATHER, GIF, HOURLY, GIF, FORECAST, GIF, WORLD, GIF};
 constexpr int SLOTS = sizeof(SEQUENCE) / sizeof(SEQUENCE[0]);
-constexpr float GIF_SECONDS = 10;  // at least one full loop, at most twice this long
+constexpr float GIF_SECONDS = 10;      // at least one full loop and at least this long
+constexpr float GIF_MAX_SECONDS = 300; // only a safety net: a long GIF always plays to its end
 static const char* const DAY_NAMES[] = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"};
 static const char* const MONTH_NAMES[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                                           "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
@@ -150,72 +151,62 @@ static void drawWeather() {
   text(SMALL, wind, cx, y0 + 55, GREY, 1, 'c');
 }
 
+// A block of the hourly and daily screens: icon, label, a big number in
+// colour, and a small line underneath. Portrait stacks four blocks of
+// 29 rows; landscape puts four columns of 32 side by side.
+static void block(int i, const uint8_t* icon, const char* label, const char* big, RGB bigColor, const char* small,
+                  RGB smallColor) {
+  if (portrait()) {
+    const int y = 11 + i * 29;
+    if (i) dotsH(y - 1, 2, 62);
+    blit(icon, 24, 2, y + 2);
+    text(SMALL, label, 46, y + 2, GREY, 1, 'c');
+    text(LARGE, big, 46, y + 10, bigColor, 1, 'c');
+    text(SMALL, small, 46, y + 21, smallColor, 1, 'c');
+  } else {
+    const int x = i * 32;
+    if (i) dotsV(x, 2, 62);
+    text(SMALL, label, x + 16, 1, GREY, 1, 'c');
+    blit(icon, 24, x + 4, 10);
+    text(LARGE, big, x + 16, 37, bigColor, 1, 'c');
+    text(SMALL, small, x + 16, 49, smallColor, 1, 'c');
+  }
+}
+
+static void header(const char* title) {
+  if (portrait()) text(SMALL, title, 32, 1, GREY, 1, 'c');
+}
+
+static RGB tempColor(float t) { return t >= 25 ? ORANGE : t >= 15 ? YELLOW : t >= 5 ? WHITE : LIGHTBLUE; }
+
 static void drawHourly() {
   if (!weatherReady()) return;
   const auto& w = DashWeather::current;
-  char buf[8];
-  if (portrait()) {
-    text(SMALL, "NEXT HOURS", 32, 0, GREY, 1, 'c');
-    const int rows = w.hours < 10 ? w.hours : 10;
-    for (int i = 0; i < rows; i++) {
-      const int y = 9 + i * 12;
-      snprintf(buf, sizeof buf, "%02d", w.hHour[i]);
-      text(SMALL, buf, 0, y + 2, GREY);
-      blit(hourIcons[i].get(DashIcons::fromWmo(w.hCode[i], w.hDay[i]), 12, alloc), 12, 14, y);
-      snprintf(buf, sizeof buf, "%d", (int)lroundf(w.hTemp[i]));
-      text(SMALL, buf, 38, y + 2, w.hTemp[i] >= 15 ? ORANGE : WHITE, 1, 'r');
-      fillRect(41, y + 3, w.hRain[i] * 22 / 100, 5, BLUE);
-    }
-    return;
-  }
-  // Landscape: temperature line over 24 hours, rain bars underneath
-  float lo = 1e9f, hi = -1e9f;
-  for (int i = 0; i < w.hours; i++) lo = fminf(lo, w.hTemp[i]), hi = fmaxf(hi, w.hTemp[i]);
-  if (hi - lo < 4) hi = lo + 4;
-  const int top = 10, bot = 46;
-  auto yOf = [&](float t) { return (int)lroundf(bot - (t - lo) * (bot - top) / (hi - lo)); };
-  text(SMALL, "NEXT 24H", 1, 0, GREY);
-  snprintf(buf, sizeof buf, "%d", (int)lroundf(hi));
-  text(SMALL, buf, 127, 0, ORANGE, 1, 'r');
-  for (int i = 0; i < w.hours; i++) fillRect(i * 5 + 4, 63 - w.hRain[i] * 12 / 100, 3, w.hRain[i] * 12 / 100, BLUE);
-  for (int i = 0; i + 1 < w.hours; i++) {
-    const int y0 = yOf(w.hTemp[i]), y1 = yOf(w.hTemp[i + 1]);
-    for (int s = 0; s <= 5; s++) px(i * 5 + 5 + s, y0 + (y1 - y0) * s / 5, w.hTemp[i] >= 15 ? YELLOW : WHITE);
-  }
-  for (int i = 0; i < w.hours; i += 8) {
-    if (i == 0) text(SMALL, "NOW", 5, 49, GREY);
-    else {
-      snprintf(buf, sizeof buf, "%02d", w.hHour[i]);
-      text(SMALL, buf, i * 5 + 5, 49, GREY);
-    }
+  header("NEXT HOURS");
+  char label[8], temp[8], rain[8];
+  for (int i = 0; i < 4; i++) {
+    const int h = i * 3;  // now, +3, +6, +9 hours
+    if (h >= w.hours) break;
+    if (i == 0) snprintf(label, sizeof label, "NOW");
+    else snprintf(label, sizeof label, "%02d:00", w.hHour[h]);
+    snprintf(temp, sizeof temp, "%d", (int)lroundf(w.hTemp[h]));
+    snprintf(rain, sizeof rain, "%d%%", w.hRain[h]);
+    block(i, hourIcons[i].get(DashIcons::fromWmo(w.hCode[h], w.hDay[h]), 24, alloc), label, temp,
+          tempColor(w.hTemp[h]), rain, w.hRain[h] >= 10 ? LIGHTBLUE : DIM);
   }
 }
 
 static void drawForecast() {
   if (!weatherReady()) return;
   const auto& w = DashWeather::current;
+  header("NEXT DAYS");
   char hi[8], lo[8];
   for (int i = 0; i < 4 && i + 1 < w.days; i++) {
-    const int d = i + 1;
-    const char* name = DAY_NAMES[DashTz::weekday(w.dYear[d], w.dMonth[d], w.dDay[d])];
+    const int d = i + 1;  // from tomorrow
     snprintf(hi, sizeof hi, "%d", (int)lroundf(w.dMax[d]));
     snprintf(lo, sizeof lo, "%d", (int)lroundf(w.dMin[d]));
-    const uint8_t* icon = dayIcons[i].get(DashIcons::fromWmo(w.dCode[d], true), 32, alloc);
-    if (portrait()) {
-      const int y = i * 32;
-      blit(icon, 32, 0, y);
-      text(SMALL, name, 48, y + 3, WHITE, 1, 'c');
-      text(LARGE, hi, 48, y + 12, ORANGE, 1, 'c');
-      text(SMALL, lo, 48, y + 22, LIGHTBLUE, 1, 'c');
-      if (i) dotsH(y, 2, 62);
-    } else {
-      const int x = i * 32;
-      text(SMALL, name, x + 16, 0, WHITE, 1, 'c');
-      blit(icon, 32, x, 8);
-      text(LARGE, hi, x + 16, 41, ORANGE, 1, 'c');
-      text(SMALL, lo, x + 16, 51, LIGHTBLUE, 1, 'c');
-      if (i) dotsV(x, 2, 62);
-    }
+    block(i, dayIcons[i].get(DashIcons::fromWmo(w.dCode[d], true), 24, alloc),
+          DAY_NAMES[DashTz::weekday(w.dYear[d], w.dMonth[d], w.dDay[d])], hi, tempColor(w.dMax[d]), lo, LIGHTBLUE);
   }
 }
 
@@ -236,21 +227,22 @@ static void drawWorld() {
     gmtime_r(&local, &t);
     snprintf(hm, sizeof hm, "%02d:%02d", t.tm_hour, t.tm_min);
     const int dayDiff = (int)(DashTz::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday) - homeDay);
-    const RGB dot = (t.tm_hour >= 7 && t.tm_hour < 19) ? YELLOW : BLUE;  // day or night over there
+    const bool day = t.tm_hour >= 7 && t.tm_hour < 19;  // day or night over there
     if (portrait()) {
+      // name across the top, a clock face on the left, the time on the right
       const int y = i * 32;
+      if (i) dotsH(y, 2, 62);
       text(SMALL, name, 32, y + 2, GREY, 1, 'c');
-      fillRect(1, y + 16, 3, 5, dot);
-      text(LARGE, hm, 33, y + 12, WHITE, 1, 'c');
-      if (dayDiff) text(SMALL, dayDiff > 0 ? "+1" : "-1", 63, y + 23, CYAN, 1, 'r');
-      if (i < n - 1) dotsH(y + 31, 2, 62);
+      dial(12, y + 20, 10, t.tm_hour, t.tm_min, day);
+      text(LARGE, hm, 44, y + 13, WHITE, 1, 'c');
+      if (dayDiff) text(SMALL, dayDiff > 0 ? "+1 DAY" : "-1 DAY", 44, y + 24, CYAN, 1, 'c');
     } else {
       const int y = i * 16;
-      fillRect(1, y + 6, 3, 4, dot);
-      text(LARGE, name, 7, y + 4, GREY);
+      if (i) dotsH(y, 1, 127);
+      dial(8, y + 8, 6, t.tm_hour, t.tm_min, day);
+      text(LARGE, name, 19, y + 4, GREY);
       if (dayDiff) text(SMALL, dayDiff > 0 ? "+1" : "-1", 86, y + 5, CYAN);
       text(LARGE, hm, 127, y + 4, WHITE, 1, 'r');
-      if (i < n - 1) dotsH(y + 15, 1, 127);
     }
   }
 }
@@ -303,8 +295,9 @@ void update(float dt, const InputFrame& input) {
   }
   if (!autoRotate) return;
   onScreen += dt;
-  const bool gifDone = screen == GIF && ((DashGifs::player.loops > 0 && onScreen >= GIF_SECONDS) ||
-                                         onScreen >= 2 * GIF_SECONDS || !DashGifs::player.playing());
+  // Ends with a loop, never in the middle of one
+  const bool gifDone = screen == GIF && ((DashGifs::player.wrapped && onScreen >= GIF_SECONDS) ||
+                                         onScreen >= GIF_MAX_SECONDS || !DashGifs::player.playing());
   if (screen == GIF ? gifDone : onScreen >= screenSeconds(screen)) moveSlot(1);
 }
 

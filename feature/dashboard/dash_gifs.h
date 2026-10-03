@@ -156,6 +156,7 @@ struct Player {
   Clip* clip = nullptr;
   char name[NAME_LEN + 1] = "";
   int frame = 0, loops = 0;
+  bool wrapped = false;  // a loop ended during the last advance()
   float msInFrame = 0;
 
   // Plays the clip prepare() has loaded, if it is for this orientation.
@@ -188,6 +189,7 @@ struct Player {
   bool playing() const { return clip != nullptr; }
 
   void advance(float dt) {
+    wrapped = false;
     if (!playing()) return;
     msInFrame += dt * 1000;
     while (msInFrame >= clip->delays[frame]) {
@@ -195,6 +197,7 @@ struct Player {
       if (++frame >= clip->frames) {
         frame = 0;
         loops++;
+        wrapped = true;
       }
     }
   }

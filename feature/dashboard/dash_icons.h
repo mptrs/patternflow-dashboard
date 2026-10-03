@@ -3,6 +3,7 @@
 // buffer (supersampled for smooth edges) and only re-rendered when it changes.
 #pragma once
 #include <math.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -153,6 +154,7 @@ struct Slot {
   uint8_t* rgb = nullptr;
   const uint8_t* get(Kind k, int sz, void* (*alloc)(size_t)) {
     if (!rgb || size != sz) {
+      free(rgb);  // a new size (the screen was turned): don't leak the old one
       rgb = (uint8_t*)alloc((size_t)sz * sz * 3);
       size = sz;
       kind = -1;
