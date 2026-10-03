@@ -414,6 +414,14 @@ async function pick(f){if(!f)return;
  $('opts').hidden=false;$('pv-empty').hidden=true;document.documentElement.classList.add('has-gif');$('pp').hidden=$('pl').hidden=false;$('split').classList.toggle('on',gif.W>=1.6*gif.H);
  $('name').value=f.name.replace(/\.gif$/i,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);
  PF.dirty=true;preview();}
+// After an upload: back to an empty form, ready for the next GIF
+function resetGif(){
+  clearTimeout(anim);gif=null;clips=null;
+  $('file').value='';$('url').value='';$('name').value='';say('','info',$('gmsg'));
+  for(const id of['fit','scale'])$(id).querySelectorAll('.seg').forEach((x,i)=>x.classList.toggle('on',i===0));
+  $('split').classList.remove('on');$('up').disabled=true;$('opts').hidden=true;
+  $('pp').hidden=$('pl').hidden=true;$('pv-empty').hidden=false;document.documentElement.classList.remove('has-gif');
+}
 $('file').onchange=()=>pick($('file').files[0]);
 const drop=$('drop');
 drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over')});
@@ -449,6 +457,6 @@ $('up').onclick=()=>{const name=$('name').value;if(!/^[a-z0-9-]{1,24}$/.test(nam
  const send=async()=>{for(const o of['p','l']){say(`uploading ${o==='p'?'portrait':'landscape'}…`,'info',$('gmsg'));
    const fd=new FormData();fd.append('clip',new Blob([clipBytes(clips[o])]),'clip.dgf');
    await post(`/api/dashboard/gif?name=${name}&o=${o}`,fd);}};
- PF.busy($('up'),PF.hold(send())).then(()=>{PF.dirty=false;say('uploaded '+name,'ok',$('gmsg'));dash.now()},e=>say('upload failed: '+e.message,'err',$('gmsg')));};
+ PF.busy($('up'),PF.hold(send())).then(()=>{PF.dirty=false;resetGif();say('uploaded '+name,'ok',$('umsg'));dash.now()},e=>say('upload failed: '+e.message,'err',$('gmsg')));};
 </script>
 </body></html>
