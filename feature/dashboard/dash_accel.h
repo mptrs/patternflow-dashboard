@@ -5,10 +5,12 @@
 // uses the same two, so this edition and a microphone don't go together).
 //
 // Nothing here may break a panel without the sensor:
+//   - off until switched on on the settings page: GPIO43/44 are also the
+//     board's serial console (TX/RX), so they are left alone unless a sensor
+//     is wired to them
 //   - all I2C traffic runs in a low-priority task on core 0, never in a frame
-//   - no sensor: auto-rotation simply stays off and K2 works as before; the
-//     task looks for one every minute, so it can be plugged in later (each
-//     look without a sensor logs two I2C errors from the Arduino core: harmless)
+//   - switched on but not found: auto-rotation stays off and K2 works as
+//     before; the task looks again every minute
 //   - the chip is identified (WHO_AM_I = 0x33) before anything is trusted,
 //     and readings that cannot be gravity are ignored
 #pragma once
@@ -24,6 +26,7 @@ constexpr int SCL_PIN = 44;
 constexpr uint8_t WHO_AM_I = 0x0F, CTRL_REG1 = 0x20, CTRL_REG4 = 0x23, OUT_X_L = 0x28;
 
 // Settings (NVS namespace "dashboard")
+inline volatile bool enabled = false;  // a sensor is wired to GPIO43/44
 inline bool autoRotate = true;     // follow the sensor
 inline bool flipPatterns = true;   // turn Patternflow's own patterns 180 degrees when upside down
 inline uint8_t uprightAxis = 0;    // axis (0 x, 1 y) that points down when the panel hangs upright (portrait)
@@ -40,6 +43,7 @@ inline volatile uint32_t stableSerial = 0;     // bumps each time `stable` chang
 inline void load() {
   Preferences prefs;
   if (!prefs.begin("dashboard", true)) return;
+  enabled = prefs.getBool("accelOn", false);
   autoRotate = prefs.getBool("autoRot", true);
   flipPatterns = prefs.getBool("flipPat", true);
   uprightAxis = prefs.getUChar("upAxis", 0) & 1;
@@ -51,6 +55,7 @@ inline void load() {
 inline void save() {
   Preferences prefs;
   if (!prefs.begin("dashboard", false)) return;
+  prefs.putBool("accelOn", enabled);
   prefs.putBool("autoRot", autoRotate);
   prefs.putBool("flipPat", flipPatterns);
   prefs.putUChar("upAxis", uprightAxis);
@@ -120,18 +125,20 @@ inline bool readGravity() {
   return true;
 }
 
+inline TaskHandle_t task = nullptr;
+
 inline void sensorTask(void*) {
   Wire.begin(SDA_PIN, SCL_PIN, 100000);
   Wire.setTimeOut(20);
   int candidate = -1, same = 0, failures = 0;
-  for (;;) {
+  while (enabled) {
     if (!present) {
       if (probe()) {
         present = true;
         failures = 0;
         Serial.printf("[DASH] accelerometer found at 0x%02X\n", address);
       } else {
-        vTaskDelay(pdMS_TO_TICKS(60000));  // look again in a while: it may be plugged in later
+        for (int i = 0; i < 600 && enabled; i++) vTaskDelay(pdMS_TO_TICKS(100));  // look again in a minute
         continue;
       }
     }
@@ -158,11 +165,22 @@ inline void sensorTask(void*) {
     }
     vTaskDelay(pdMS_TO_TICKS(200));
   }
+  // Switched off: hand the pins back
+  Wire.end();
+  present = false;
+  stable = -1;
+  task = nullptr;
+  vTaskDelete(nullptr);
+}
+
+// Start or stop the sensor task to match `enabled` (from setup and the settings page).
+inline void apply() {
+  if (enabled && !task) xTaskCreatePinnedToCore(sensorTask, "dash_accel", 4096, nullptr, 1, &task, 0);
 }
 
 inline void begin() {
   load();
-  xTaskCreatePinnedToCore(sensorTask, "dash_accel", 4096, nullptr, 1, nullptr, 0);
+  apply();
 }
 
 }  // namespace DashAccel

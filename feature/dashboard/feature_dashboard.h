@@ -45,7 +45,9 @@ inline void onNetwork() {
     DashHttp::registerRoutes();
     routes = true;
   }
-  DashWeather::requestFetch();
+  // Not straight away: right after connecting, Patternflow itself is busy
+  // (time sync, mDNS, pattern loading) and the board's memory is at its tightest.
+  DashWeather::requestFetch(30000);
 }
 
 inline void loop(const PFFeatureFrame& frame) {

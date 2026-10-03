@@ -2,7 +2,8 @@
 //
 // The browser does all the GIF work (decode, scale, convert) on the settings
 // page and uploads two clips per GIF: one for portrait (64x128) and one for
-// landscape (128x64). The panel only streams frames from flash.
+// landscape (128x64). The panel reads the next clip into PSRAM in the
+// background and plays it from there.
 //
 // Clip file (/dashgif/<name>.p.dgf or .l.dgf), little-endian:
 //   "DGF1"  uint16 width  uint16 height  uint16 frames  uint16 0
@@ -82,61 +83,116 @@ inline bool any() {
   return count > 0;
 }
 
+// ---------------------------------------------------------------- loading
+// A clip is read into PSRAM by a task on core 0, in small chunks, while the
+// screen before it is showing; it then plays from RAM. Reading frames from
+// flash during playback would hold the flash (and with it, briefly, the other
+// core and Wi-Fi) many times a second.
+struct Clip {
+  uint8_t* pixels = nullptr;  // frames * w * h, in PSRAM, allocated once at the largest size
+  int w = 0, h = 0, frames = 0;
+  bool portrait = true;
+  char name[NAME_LEN + 1] = "";
+  uint16_t delays[MAX_FRAMES];
+};
+
+constexpr size_t CLIP_BYTES = (size_t)MAX_FRAMES * 128 * 64;
+inline Clip clips[2];
+inline int playing_ = 0;                 // clips[playing_] is the one on screen
+inline volatile int loadState = 0;       // 0 idle, 1 loading, 2 ready, 3 failed
+inline Clip& loaded() { return clips[1 - playing_]; }
+
+inline void loadTask(void*) {
+  Clip& c = loaded();
+  bool ok = false;
+  char p[64];
+  path(p, sizeof p, c.name, c.portrait);
+  File f = FFat.open(p, FILE_READ);
+  uint8_t head[12];
+  if (f && f.read(head, 12) == 12 && memcmp(head, "DGF1", 4) == 0) {
+    c.w = head[4] | head[5] << 8;
+    c.h = head[6] | head[7] << 8;
+    c.frames = head[8] | head[9] << 8;
+    const bool shape = c.w == (c.portrait ? 64 : 128) && c.h == (c.portrait ? 128 : 64);
+    if (shape && c.frames >= 1 && c.frames <= MAX_FRAMES &&
+        f.read((uint8_t*)c.delays, c.frames * 2) == (size_t)c.frames * 2) {
+      const size_t total = (size_t)c.frames * c.w * c.h;
+      size_t done = 0;
+      while (done < total) {
+        const size_t n = total - done < 8192 ? total - done : 8192;
+        if (f.read(c.pixels + done, n) != n) break;
+        done += n;
+        vTaskDelay(pdMS_TO_TICKS(2));  // let Wi-Fi and the web server in between chunks
+      }
+      ok = done == total;
+      for (int i = 0; i < c.frames; i++) c.delays[i] = c.delays[i] < 20 ? 20 : c.delays[i];
+    }
+  }
+  if (f) f.close();
+  loadState = ok ? 2 : 3;
+  vTaskDelete(nullptr);
+}
+
+// Have the next clip ready for this orientation. Cheap to call every frame.
+inline void prepare(bool portrait) {
+  if (loadState == 1 || !any()) return;
+  Clip& c = loaded();
+  if (loadState == 2 && c.portrait == portrait) return;  // already waiting
+  if (!c.pixels) c.pixels = (uint8_t*)PFMem::alloc(CLIP_BYTES);
+  if (!c.pixels) return;
+  strcpy(c.name, names[nextClip % count]);
+  c.portrait = portrait;
+  loadState = 1;
+  if (xTaskCreatePinnedToCore(loadTask, "dash_gif", 4096, nullptr, 1, nullptr, 0) != pdPASS) loadState = 3;
+}
+
+// After an upload or delete: a clip read before it may be stale.
+inline void forget(const char* name) {
+  if (loadState == 2 && strcmp(loaded().name, name) == 0) loadState = 0;
+}
+
 // ---------------------------------------------------------------- player
 struct Player {
-  File file;
+  Clip* clip = nullptr;
   char name[NAME_LEN + 1] = "";
-  int w = 0, h = 0, frames = 0, frame = -1, shown = -1, loops = 0;
-  uint16_t delays[MAX_FRAMES];
-  uint32_t dataStart = 0;
+  int frame = 0, loops = 0;
   float msInFrame = 0;
-  uint8_t* pixels = nullptr;
 
+  // Plays the clip prepare() has loaded, if it is for this orientation.
   bool start(bool portrait) {
     stop();
-    if (!any()) return false;
-    const char* pick = names[nextClip++ % count];
-    char p[64];
-    path(p, sizeof p, pick, portrait);
-    file = FFat.open(p, FILE_READ);
-    uint8_t head[12];
-    if (!file || file.read(head, 12) != 12 || memcmp(head, "DGF1", 4) != 0) return fail();
-    w = head[4] | head[5] << 8;
-    h = head[6] | head[7] << 8;
-    frames = head[8] | head[9] << 8;
-    if (w != (portrait ? 64 : 128) || h != (portrait ? 128 : 64) || frames < 1 || frames > MAX_FRAMES) return fail();
-    if (file.read((uint8_t*)delays, frames * 2) != (size_t)frames * 2) return fail();
-    for (int i = 0; i < frames; i++) delays[i] = delays[i] < 20 ? 20 : delays[i];
-    dataStart = 12 + frames * 2;
-    if (!pixels) pixels = (uint8_t*)PFMem::alloc(128 * 64);
-    if (!pixels) return fail();
-    strcpy(name, pick);
+    if (loadState == 3) {  // that one could not be read: try the next next time
+      loadState = 0;
+      nextClip++;
+    }
+    if (loadState != 2 || loaded().portrait != portrait) {
+      prepare(portrait);
+      return false;
+    }
+    playing_ = 1 - playing_;
+    loadState = 0;
+    nextClip++;
+    clip = &clips[playing_];
+    strcpy(name, clip->name);
     frame = 0;
-    shown = -1;
     loops = 0;
     msInFrame = 0;
     return true;
   }
 
-  bool fail() {
-    stop();
-    return false;
-  }
-
   void stop() {
-    if (file) file.close();
-    frames = 0;
+    clip = nullptr;
     name[0] = 0;
   }
 
-  bool playing() const { return frames > 0; }
+  bool playing() const { return clip != nullptr; }
 
   void advance(float dt) {
     if (!playing()) return;
     msInFrame += dt * 1000;
-    while (msInFrame >= delays[frame]) {
-      msInFrame -= delays[frame];
-      if (++frame >= frames) {
+    while (msInFrame >= clip->delays[frame]) {
+      msInFrame -= clip->delays[frame];
+      if (++frame >= clip->frames) {
         frame = 0;
         loops++;
       }
@@ -145,17 +201,11 @@ struct Player {
 
   void draw() {
     if (!playing()) return;
-    if (shown != frame) {  // read a frame from flash only when it changes
-      file.seek(dataStart + (uint32_t)frame * w * h);
-      if (file.read(pixels, w * h) != (size_t)w * h) {
-        stop();
-        return;
-      }
-      shown = frame;
-    }
+    const int w = clip->w, h = clip->h;
+    const uint8_t* px = clip->pixels + (size_t)frame * w * h;
     for (int y = 0; y < h; y++)
       for (int x = 0; x < w; x++) {
-        const uint8_t i = pixels[y * w + x];
+        const uint8_t i = px[y * w + x];
         if (i) DashGfx::px(x, y, color(i));
       }
   }
@@ -166,6 +216,7 @@ inline Player player;
 // From the HTTP handlers (via PFLoopSync, so never mid-frame)
 inline void removeClip(const char* name) {
   if (strcmp(player.name, name) == 0) player.stop();
+  forget(name);
   char p[64];
   path(p, sizeof p, name, true);
   FFat.remove(p);

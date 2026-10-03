@@ -288,6 +288,8 @@ void update(float dt, const InputFrame& input) {
   }
   if (input.btnPressed[3]) DashState::wantBack = true;
 
+  // Read the next GIF into memory while another screen is showing
+  if (screen != GIF) DashGifs::prepare(portraitFor(DashState::orientation));
   if (screen == GIF) {
     if (gifOrientation != DashState::orientation) {  // turned while playing: reopen in the new shape
       gifOrientation = DashState::orientation;

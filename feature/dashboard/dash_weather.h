@@ -246,7 +246,7 @@ inline void fetchTask(void* arg) {
   vTaskDelete(nullptr);
 }
 
-inline void requestFetch() { nextFetchMs = millis(); }
+inline void requestFetch(uint32_t afterMs = 0) { nextFetchMs = millis() + afterMs; }
 
 // Called every frame from the feature's loop hook (core 1). Never blocks.
 inline void tick() {

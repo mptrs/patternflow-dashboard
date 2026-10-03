@@ -191,6 +191,7 @@ inline void handleUploadDone() {
   DashGifs::path(dst, sizeof dst, name.c_str(), portrait);
   (void)PFLoopSync::run([&] {
     if (strcmp(DashGifs::player.name, name.c_str()) == 0) DashGifs::player.stop();
+    DashGifs::forget(name.c_str());
     FFat.remove(dst);
     FFat.rename(tmp, dst);
     DashGifs::listDirty = true;
@@ -213,8 +214,8 @@ inline void handleOrientationGet() {
   char json[200];
   const float x = DashAccel::gx, y = DashAccel::gy, z = DashAccel::gz;
   snprintf(json, sizeof json,
-           "{\"present\":%s,\"auto\":%s,\"flip\":%s,\"orientation\":%d,\"sensed\":%d,\"g\":[%.2f,%.2f,%.2f]}",
-           DashAccel::present ? "true" : "false", DashAccel::autoRotate ? "true" : "false",
+           "{\"enabled\":%s,\"present\":%s,\"auto\":%s,\"flip\":%s,\"orientation\":%d,\"sensed\":%d,\"g\":[%.2f,%.2f,%.2f]}",
+           DashAccel::enabled ? "true" : "false", DashAccel::present ? "true" : "false", DashAccel::autoRotate ? "true" : "false",
            DashAccel::flipPatterns ? "true" : "false", DashState::orientation,
            DashAccel::present ? DashAccel::orientationOf(x, y, z) : -1, x, y, z);
   sendJson(200, json);
@@ -224,12 +225,14 @@ inline void handleOrientationPost() {
   const String action = server().arg("action");
   bool ok = true;
   (void)PFLoopSync::run([&] {
+    if (server().hasArg("enabled")) DashAccel::enabled = server().arg("enabled") == "1";
     if (server().hasArg("auto")) DashAccel::autoRotate = server().arg("auto") == "1";
     if (server().hasArg("flip")) DashAccel::flipPatterns = server().arg("flip") == "1";
     if (action == "upright") ok = DashAccel::calibrateUpright();
     if (action == "flipportrait") DashAccel::uprightSign = -DashAccel::uprightSign;
     if (action == "fliplandscape") DashAccel::landscapeSign = -DashAccel::landscapeSign;
     DashAccel::save();
+    DashAccel::apply();
     // Apply right away instead of waiting for the next turn
     const int o = DashAccel::orientationOf(DashAccel::gx, DashAccel::gy, DashAccel::gz);
     if (DashAccel::present && DashAccel::autoRotate && o >= 0) DashState::orientation = o;

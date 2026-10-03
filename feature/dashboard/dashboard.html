@@ -58,6 +58,7 @@ border:1px solid var(--led);background:var(--led);color:var(--panel);font-weight
 font:inherit;font-size:13px;color:var(--muted);text-align:left}
 .switch i{flex:none;width:34px;height:20px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);position:relative;display:inline-block}
 .switch i::after{content:"";position:absolute;top:2px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--muted)}
+.switch:disabled{opacity:.4;cursor:default}
 .switch.on i{border-color:var(--led);background:var(--led)}
 .switch.on i::after{left:17px;background:var(--cream)}
 .switch.big i{width:38px;height:22px}.switch.big i::after{top:3px}.switch.big.on i::after{left:19px}
@@ -152,7 +153,8 @@ html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
 
     <section>
       <h2>Orientation</h2>
-      <div class="row"><button type="button" class="switch" id="oauto"><i></i><span>Turn with the panel (needs the accelerometer)</span></button></div>
+      <div class="row"><button type="button" class="switch" id="oon"><i></i><span>An accelerometer is connected (LIS3DH on GPIO43/44)</span></button></div>
+      <div class="row"><button type="button" class="switch" id="oauto"><i></i><span>Turn with the panel</span></button></div>
       <div class="row"><button type="button" class="switch" id="oflip"><i></i><span>Also turn Patternflow's patterns when the panel hangs upside down</span></button></div>
       <h2 style="margin-top:16px">Calibrate</h2>
       <div class="chips">
@@ -160,7 +162,7 @@ html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
         <button type="button" class="chip" id="ofp">Portrait is upside down</button>
         <button type="button" class="chip" id="ofl">Landscape is upside down</button>
       </div>
-      <p class="note">Hang the panel upright (portrait) and press <i>This is upright</i>. If the dashboard then reads upside down in portrait or landscape, press the matching button. Without a sensor, turn K2 on the dashboard to rotate by hand.</p>
+      <p class="note">Hang the panel upright (portrait) and press <i>This is upright</i>. If the dashboard then reads upside down in portrait or landscape, press the matching button. Without a sensor, turn K2 on the dashboard to rotate by hand. Leave the first switch off when nothing is connected: the two pins are also the board's serial console.</p>
     </section>
 
     <section>
@@ -320,15 +322,18 @@ $('csave').onclick=()=>{const text=clocks.map(c=>`${c.name}|${c.spec}|${c.label}
 // ── orientation ───────────────────────────────────────────────────────
 function ofill(s){
   if(!s)return;
+  $('oon').classList.toggle('on',s.enabled);
   $('oauto').classList.toggle('on',s.auto);$('oflip').classList.toggle('on',s.flip);
+  $('oauto').disabled=$('oflip').disabled=!s.enabled;
   $('d-or').textContent=ONAMES[s.orientation]||'-';
-  $('d-acc').textContent=s.present?(s.sensed<0?'flat or moving':'reads '+ONAMES[s.sensed]):'not connected';
+  $('d-acc').textContent=!s.enabled?'off':s.present?(s.sensed<0?'flat or moving':'reads '+ONAMES[s.sensed]):'not found';
   $('d-acc').className=s.present?'ok':'';
   for(const id of['oup','ofp','ofl'])$(id).disabled=!s.present;
   orient.set(s.present?2000:10000);
 }
 const orient=PF.poll('/api/dashboard/orientation',2000,ofill);
 function setOrient(body,btn){const p=post('/api/dashboard/orientation',new URLSearchParams(body)).then(d=>{ofill(d);say('on the panel','ok')},e=>say(e.message,'err'));if(btn)PF.busy(btn,p);}
+$('oon').onclick=()=>setOrient({enabled:$('oon').classList.contains('on')?0:1});
 $('oauto').onclick=()=>setOrient({auto:$('oauto').classList.contains('on')?0:1});
 $('oflip').onclick=()=>setOrient({flip:$('oflip').classList.contains('on')?0:1});
 $('oup').onclick=()=>setOrient({action:'upright'},$('oup'));

@@ -36,7 +36,7 @@ state = {"place": "", "lat": 0.0, "lon": 0.0, "night": {"on": True, "start": 22 
          "clocks": "NEW YORK|-300,60,3.2.0/120,11.1.0/120|America/New_York\nLONDON|0,60,3.5.0/60,10.5.0/120|Europe/London\n"
                    "TOKYO|540,0|Asia/Tokyo\nSYDNEY|600,60,10.1.0/120,4.1.0/180|Australia/Sydney\n"}
 # No accelerometer on a pretend panel (pass --accel to pretend there is one, hanging upright)
-accel = {"present": "--accel" in sys.argv, "auto": True, "flip": True, "orientation": 1, "sensed": 1, "g": [1.0, 0.02, 0.04]}
+accel = {"enabled": "--accel" in sys.argv, "present": "--accel" in sys.argv, "auto": True, "flip": True, "orientation": 1, "sensed": 1, "g": [1.0, 0.02, 0.04]}
 
 
 def clips():
@@ -80,6 +80,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(state))
         if url.path == "/api/dashboard/orientation":
             f = {k: v[0] for k, v in parse_qs(body.decode()).items()}
+            if "enabled" in f: accel["enabled"] = f["enabled"] == "1"
             if "auto" in f: accel["auto"] = f["auto"] == "1"
             if "flip" in f: accel["flip"] = f["flip"] == "1"
             return self.send(200, json.dumps(accel))
