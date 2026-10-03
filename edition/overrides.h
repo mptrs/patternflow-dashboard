@@ -9,7 +9,7 @@
 #pragma once
 
 #define PF_VARIANT          "dashboard"
-#define PF_VARIANT_VERSION  "v0.5.8"
+#define PF_VARIANT_VERSION  "v0.5.9"
 
 // The dashboard shows up in the K4 pattern browser like any other pattern.
 #define PF_FEATURE_PRESET_INCLUDE "dashboard/preset_dashboard.h"
