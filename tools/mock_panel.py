@@ -32,7 +32,7 @@ STATUS = {"version": "3.10.5", "build": "mock", "variant": "dashboard", "variant
 
 def page():  # read on every request, so an edit shows on refresh
     return console_page.stamped(str(SKETCH), (ROOT / "feature/dashboard/dashboard.html").read_text())
-state = {"place": "", "lat": 0.0, "lon": 0.0, "night": {"on": True, "start": 22 * 60, "end": 8 * 60},
+state = {"place": "", "lat": 0.0, "lon": 0.0, "clockStyle": 2, "night": {"on": True, "start": 22 * 60, "end": 8 * 60},
          "clocks": "NEW YORK|-300,60,3.2.0/120,11.1.0/120|America/New_York\nLONDON|0,60,3.5.0/60,10.5.0/120|Europe/London\n"
                    "TOKYO|540,0|Asia/Tokyo\nSYDNEY|600,60,10.1.0/120,4.1.0/180|Australia/Sydney\n"}
 # No accelerometer on a pretend panel (pass --accel to pretend there is one, hanging upright)
@@ -86,6 +86,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(accel))
         if url.path == "/api/dashboard/clocks":
             f = {k: v[0] for k, v in parse_qs(body.decode(), keep_blank_values=True).items()}
+            if "clocks" not in f:
+                state["clockStyle"] = int(f.get("style", 2))
+                return self.send(200, '{"ok":true}')
             lines = [l for l in f.get("clocks", "").split("\n") if l]
             ok = [l for l in lines if re.fullmatch(r"[ -~]{1,10}\|-?\d+,\d+(,\d+\.\d\.\d/-?\d+,\d+\.\d\.\d/-?\d+)?\|[A-Za-z0-9/_+-]{0,40}", l)]
             if len(ok) != len(lines) or len(lines) > 4:

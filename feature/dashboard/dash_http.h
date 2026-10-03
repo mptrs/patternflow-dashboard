@@ -36,14 +36,14 @@ inline void handleGet() {
   String clocksJson;
   (void)PFLoopSync::run([&] { clocksJson = DashClocks::format(); });
   clocksJson.replace("\n", "\\n");
-  char head[260 + 4 * 128];
+  char head[340 + 4 * 132];  // fixed text, place, error, and four clock lines with escaped newlines
   snprintf(head, sizeof head,
            "{\"place\":\"%s\",\"lat\":%.4f,\"lon\":%.4f,\"updated\":%u,\"error\":\"%s\","
-           "\"night\":{\"on\":%s,\"start\":%d,\"end\":%d},\"free\":%u,\"clocks\":\"%s\",\"gifs\":[",
+           "\"night\":{\"on\":%s,\"start\":%d,\"end\":%d},\"free\":%u,\"clockStyle\":%d,\"clocks\":\"%s\",\"gifs\":[",
            has ? DashWeather::place : "", has ? DashWeather::lat : 0.0f, has ? DashWeather::lon : 0.0f,
            DashWeather::updatedAtMs ? (unsigned)((millis() - DashWeather::updatedAtMs) / 1000) : 0u,
            DashWeather::lastError, DashNight::enabled ? "true" : "false", DashNight::startMin, DashNight::endMin,
-           (unsigned)(FFat.totalBytes() - FFat.usedBytes()), clocksJson.c_str());
+           (unsigned)(FFat.totalBytes() - FFat.usedBytes()), DashClocks::style, clocksJson.c_str());
   String json = head;
   // The clip list belongs to the loop task: copy it there.
   String list;
@@ -84,6 +84,19 @@ inline void handleLocation() {
 }
 
 inline void handleClocks() {
+  if (!server().hasArg("clocks")) {  // only the style
+    const int st = server().arg("style").toInt();
+    if (st < 0 || st > 2) {
+      sendJson(400, "{\"error\":\"style 0, 1 or 2\"}");
+      return;
+    }
+    (void)PFLoopSync::run([&] {
+      DashClocks::style = (uint8_t)st;
+      DashClocks::save();
+    });
+    sendJson(200, "{\"ok\":true}");
+    return;
+  }
   const String text = server().arg("clocks");
   if (text.length() > 4 * 128) {
     sendJson(400, "{\"error\":\"too long\"}");

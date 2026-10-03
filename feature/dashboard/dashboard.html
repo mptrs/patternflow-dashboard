@@ -141,6 +141,8 @@ html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
 
     <section>
       <h2>World clocks</h2>
+      <div class="row"><label>Look</label>
+        <div class="segs" id="cstyle"><button type="button" class="seg" data-v="0">Departures board</button><button type="button" class="seg" data-v="1">Day and night</button><button type="button" class="seg" data-v="2">Both in turn</button></div></div>
       <ul id="clocks"></ul>
       <form class="row" id="cf" autocomplete="off" style="margin-top:8px"><label for="cq">Add</label>
         <input id="cq" type="text" class="grow" placeholder="a city, e.g. Tokyo"><button class="go" id="cgo">Search</button></form>
@@ -229,6 +231,7 @@ function fill(s){
     $('ns').value=night.start;$('ne').value=night.end;$('non').classList.toggle('on',night.on);
   }
   drawClocks();
+  $('cstyle').querySelectorAll('.seg').forEach(b=>b.classList.toggle('on',+b.dataset.v===s.clockStyle));
   if(renaming)return;  // not while a name is being edited
   const list=$('gifs');list.innerHTML='';
   for(const g of s.gifs){const li=document.createElement('li'),n=document.createElement('span'),b=document.createElement('button'),rn=document.createElement('button');
@@ -325,6 +328,9 @@ $('cf').onsubmit=e=>{e.preventDefault();const r=$('cr');r.innerHTML='';
       li.append(b);r.append(li);}
     if(!list.length)r.innerHTML='<li class="empty">Nothing found.</li>';
   },()=>say('the place search needs internet','err')));};
+$('cstyle').addEventListener('click',e=>{const b=e.target.closest('.seg');if(!b)return;
+  $('cstyle').querySelectorAll('.seg').forEach(x=>x.classList.toggle('on',x===b));
+  post('/api/dashboard/clocks',new URLSearchParams({style:b.dataset.v})).then(()=>say('on the panel','ok'),e=>say(e.message,'err'));});
 $('csave').onclick=()=>{const text=clocks.map(c=>`${c.name}|${c.spec}|${c.label}`).join('\n');
   PF.busy($('csave'),post('/api/dashboard/clocks',new URLSearchParams({clocks:text}))
     .then(()=>{PF.dirty=false;say('clocks saved','ok',$('cmsg'));setTimeout(()=>{$('csave').disabled=true},0)},e=>say(e.message,'err',$('cmsg'))));};

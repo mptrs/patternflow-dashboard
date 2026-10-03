@@ -210,41 +210,137 @@ static void drawForecast() {
   }
 }
 
-static void drawWorld() {
+// ---------------------------------------------------------------- world clocks
+// Two looks (DashClocks::style): a split-flap departures board, and a band of
+// 24 hours per city showing day and night over there. ALTERNATE shows one on
+// each pass through the rotation.
+struct WorldTime {
+  const char* name;
+  int hour, minute, dayDiff;
+  char hm[6];
+};
+
+static bool worldTimes(WorldTime* out, int& n) {
   const int64_t now = (int64_t)time(nullptr);
   struct tm home;
-  if (!PatternflowClock::localTime(&home) || now < 1700000000) {
-    message("WAITING", "FOR TIME");
-    return;
-  }
+  if (!PatternflowClock::localTime(&home) || now < 1700000000) return false;
   const int64_t homeDay = DashTz::daysFromCivil(home.tm_year + 1900, home.tm_mon + 1, home.tm_mday);
-  char hm[8];
-  const int n = DashClocks::count;
+  n = DashClocks::count;
   for (int i = 0; i < n; i++) {
-    const char* name = DashClocks::names[i];
     const time_t local = (time_t)(now + DashTz::utcOffset(now, DashClocks::zones[i]));
     struct tm t;
     gmtime_r(&local, &t);
-    snprintf(hm, sizeof hm, "%02d:%02d", t.tm_hour, t.tm_min);
-    const int dayDiff = (int)(DashTz::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday) - homeDay);
-    const bool day = t.tm_hour >= 7 && t.tm_hour < 19;  // day or night over there
-    if (portrait()) {
-      // name across the top, a clock face on the left, the time on the right
-      const int y = i * 32;
-      if (i) dotsH(y, 2, 62);
-      text(SMALL, name, 32, y + 2, GREY, 1, 'c');
-      dial(12, y + 20, 10, t.tm_hour, t.tm_min, day);
-      text(LARGE, hm, 44, y + 13, WHITE, 1, 'c');
-      if (dayDiff) text(SMALL, dayDiff > 0 ? "+1 DAY" : "-1 DAY", 44, y + 24, CYAN, 1, 'c');
-    } else {
-      const int y = i * 16;
-      if (i) dotsH(y, 1, 127);
-      dial(8, y + 8, 6, t.tm_hour, t.tm_min, day);
-      text(LARGE, name, 19, y + 4, GREY);
-      if (dayDiff) text(SMALL, dayDiff > 0 ? "+1" : "-1", 86, y + 5, CYAN);
-      text(LARGE, hm, 127, y + 4, WHITE, 1, 'r');
-    }
+    out[i].name = DashClocks::names[i];
+    out[i].hour = t.tm_hour;
+    out[i].minute = t.tm_min;
+    out[i].dayDiff = (int)(DashTz::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday) - homeDay);
+    snprintf(out[i].hm, sizeof out[i].hm, "%02d:%02d", t.tm_hour, t.tm_min);
   }
+  return true;
+}
+
+// Day 07-19, an hour of dusk either side: a rough picture of light over there
+// (the panel knows each city's time zone, not where it is).
+static RGB lightAt(float hour) {
+  if ((hour >= 6 && hour < 7) || (hour >= 19 && hour < 20)) return RGB{150, 70, 40};
+  return hour >= 7 && hour < 19 ? RGB{120, 95, 20} : RGB{20, 30, 90};
+}
+static bool isDay(int hour) { return hour >= 7 && hour < 19; }
+
+// The board's flaps: what each one showed, and when it last changed
+constexpr float FLIP_SECONDS = 0.35f;
+static char flapShown[DashClocks::MAX][6];
+static float flapSince[DashClocks::MAX][5];
+static bool showBands = false;
+
+static void flap(char now, char before, float since, int x, int y, int w, RGB col) {
+  const RGB top{34, 32, 28}, bottom{24, 22, 19};  // the lower flap a shade darker: the split
+  const int half = 4;
+  fillRect(x, y, w, half, top);
+  fillRect(x, y + half + 1, w, half, bottom);
+  char a[2] = {now, 0}, b[2] = {before, 0};
+  if (since >= FLIP_SECONDS || before == now) {
+    text(SMALL, a, x + w / 2, y + 1, col, 1, 'c');
+    return;
+  }
+  // mid-flip: the new character's top half has fallen, the old bottom half is still up
+  clipBottom = y + half + 1;
+  text(SMALL, a, x + w / 2, y + 1, col, 1, 'c');
+  clipBottom = 1 << 14;
+  clipTop = y + half + 1;
+  text(SMALL, b, x + w / 2, y + 1, col, 1, 'c');
+  clipTop = 0;
+  fillRect(x, y + half, w, 1, since < FLIP_SECONDS / 2 ? GREY : DIM);  // the falling flap's edge
+}
+
+static void flaps(const char* s, int x, int y, int count, int stride, RGB col) {
+  for (int i = 0; i < count; i++) {
+    const char c = i < (int)strlen(s) ? s[i] : ' ';
+    flap(c, c, 1, x + i * stride, y, stride - 1, col);
+  }
+}
+
+static void drawBoard(const WorldTime* wt, int n) {
+  const RGB amber{255, 170, 20};
+  for (int i = 0; i < n; i++) {
+    // flip the characters of the time that changed since the last frame
+    for (int k = 0; k < 5; k++)
+      if (flapShown[i][k] != wt[i].hm[k]) {
+        flapSince[i][k] = 0;
+        if (!flapShown[i][k]) flapSince[i][k] = FLIP_SECONDS;  // first sight: no animation
+      }
+    char before[6];
+    memcpy(before, flapShown[i], 6);
+    memcpy(flapShown[i], wt[i].hm, 6);
+    const int y = portrait() ? 11 + i * 29 : 2 + i * 15;
+    const int nameX = portrait() ? 2 : 2, timeX = portrait() ? 2 : 90, timeY = portrait() ? y + 11 : y;
+    const int stride = portrait() ? 6 : 7;
+    flaps(wt[i].name, nameX, y, portrait() ? 10 : 9, portrait() ? 6 : 7, amber);
+    for (int k = 0; k < 5; k++)
+      flap(wt[i].hm[k], before[k] ? before[k] : wt[i].hm[k], flapSince[i][k], timeX + k * stride, timeY, stride - 1, WHITE);
+    const int dotX = portrait() ? 36 : 72, dotY = portrait() ? timeY + 2 : y + 2;
+    fillRect(dotX, dotY, 4, 5, isDay(wt[i].hour) ? YELLOW : BLUE);
+    if (wt[i].dayDiff) text(SMALL, wt[i].dayDiff > 0 ? "+1 DAY" : "-1 DAY", portrait() ? 62 : 82, dotY - 1, CYAN, 1, 'r');
+  }
+  if (portrait()) text(SMALL, "WORLD TIME", 32, 1, GREY, 1, 'c');
+}
+
+static void drawBands(const WorldTime* wt, int n) {
+  const int w = portrait() ? 60 : 124, x0 = 2, rowH = portrait() ? 32 : 16;
+  for (int i = 0; i < n; i++) {
+    const int y = i * rowH;
+    if (portrait()) {
+      if (i) dotsH(y, 2, 62);
+      text(SMALL, wt[i].name, 2, y + 3, GREY);
+      text(LARGE, wt[i].hm, 62, y + 11, WHITE, 1, 'r');
+      if (wt[i].dayDiff) text(SMALL, wt[i].dayDiff > 0 ? "+1" : "-1", 2, y + 13, CYAN);
+    } else {
+      text(SMALL, wt[i].name, 2, y + 1, GREY);
+      if (wt[i].dayDiff) text(SMALL, wt[i].dayDiff > 0 ? "+1" : "-1", 100, y + 1, CYAN, 1, 'r');
+      text(SMALL, wt[i].hm, 126, y + 1, WHITE, 1, 'r');
+    }
+    // 00:00 .. 24:00 over there, and a marker at now
+    const int by = portrait() ? y + 24 : y + 10;
+    for (int x = 0; x < w; x++) {
+      const RGB c = lightAt(x * 24.0f / w);
+      px(x0 + x, by, c);
+      px(x0 + x, by + 1, c);
+    }
+    const int mx = x0 + (int)((wt[i].hour + wt[i].minute / 60.0f) * w / 24);
+    for (int k = -2; k <= 3; k++) px(mx, by + k, WHITE);
+  }
+}
+
+static void drawWorld() {
+  WorldTime wt[DashClocks::MAX];
+  int n = 0;
+  if (!worldTimes(wt, n)) {
+    message("WAITING", "FOR TIME");
+    return;
+  }
+  const bool bands = DashClocks::style == DashClocks::BANDS || (DashClocks::style == DashClocks::ALTERNATE && showBands);
+  if (bands) drawBands(wt, n);
+  else drawBoard(wt, n);
 }
 
 // ---------------------------------------------------------------- rotation
@@ -254,6 +350,7 @@ static void moveSlot(int step) {
     slot = ((slot + step) % SLOTS + SLOTS) % SLOTS;
     screen = SEQUENCE[slot];
     if (screen == WORLD && DashClocks::count == 0) continue;  // no clocks set: skip
+    if (screen == WORLD) showBands = !showBands;  // ALTERNATE: the other look each time
     if (screen != GIF) break;
     gifOrientation = DashState::orientation;
     if (DashGifs::player.start(portraitFor(gifOrientation))) break;
@@ -269,6 +366,8 @@ void setup() {
 }
 
 void update(float dt, const InputFrame& input) {
+  for (auto& row : flapSince)
+    for (float& t : row) t += dt;
   if (input.knobDeltas[0]) {
     moveSlot(input.knobDeltas[0] > 0 ? 1 : -1);
     manualHold = DashConfig::SECONDS_MANUAL_HOLD;

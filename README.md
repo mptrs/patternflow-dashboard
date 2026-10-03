@@ -35,9 +35,9 @@ Cells fade in when they are born, shift color as they age and leave a trail when
 
 ## Dashboard
 
-<p align="center"><img src="docs/dashboard-screens.png" alt="The dashboard screens, portrait above and landscape below: clock with moon, next days, next hours, weather now and world clocks with day and night clock faces" width="100%"></p>
+<p align="center"><img src="docs/dashboard-screens.png" alt="The dashboard screens, portrait above and landscape below: clock with moon, next days, next hours, weather now, and the world clocks as a departures board and as day and night bands" width="100%"></p>
 
-Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, the next hours (now, +3, +6, +9), the next four days and world clocks with a clock face that is warm by day and dark blue at night (10 s each). A GIF plays after every screen, if you have uploaded any (always at least one full loop, and at least 10 s). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
+Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, the next hours (now, +3, +6, +9), the next four days and world clocks (10 s each). The world clocks come as a split-flap departures board whose digits flip over, as a band of 24 hours per city showing day and night there, or both in turn (set on the settings page). A GIF plays after every screen, if you have uploaded any (always at least one full loop, and at least 10 s). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
 
 | Knob | Turn | Press |
 |---|---|---|

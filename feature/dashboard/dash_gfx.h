@@ -34,8 +34,11 @@ inline void begin(int orientation) {
   PFCanvas::clear();
 }
 
+// Rows outside clipTop..clipBottom-1 are not drawn (the split-flap animation draws half glyphs).
+inline int clipTop = 0, clipBottom = 1 << 14;
+
 inline void px(int x, int y, RGB c) {
-  if ((unsigned)x >= (unsigned)W || (unsigned)y >= (unsigned)H) return;
+  if ((unsigned)x >= (unsigned)W || (unsigned)y >= (unsigned)H || y < clipTop || y >= clipBottom) return;
   if (flipped) {
     x = W - 1 - x;
     y = H - 1 - y;

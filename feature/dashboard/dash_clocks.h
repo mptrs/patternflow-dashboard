@@ -20,6 +20,11 @@ inline char names[MAX][NAME_LEN + 1];
 inline char labels[MAX][LABEL_LEN + 1];
 inline DashTz::Zone zones[MAX];
 
+// How the world clock screen looks: a split-flap departures board, a day and
+// night band per city, or the two in turn.
+enum Style : uint8_t { BOARD = 0, BANDS = 1, ALTERNATE = 2 };
+inline uint8_t style = ALTERNATE;
+
 constexpr const char* DEFAULTS =
     "NEW YORK|-300,60,3.2.0/120,11.1.0/120|America/New_York\n"
     "LONDON|0,60,3.5.0/60,10.5.0/120|Europe/London\n"
@@ -100,18 +105,21 @@ inline String format() {
 inline void load() {
   Preferences prefs;
   String text;
+  bool configured = false;
   if (prefs.begin("dashboard", true)) {
-    if (prefs.isKey("clocks")) text = prefs.getString("clocks", "");
+    configured = prefs.isKey("clocks");
+    if (configured) text = prefs.getString("clocks", "");
+    style = prefs.getUChar("clockStyle", ALTERNATE) % 3;
     prefs.end();
   }
-  if (!text.length()) parseAll(DEFAULTS);  // never configured: the defaults
-  else parseAll(text.c_str());            // (an empty list is a valid choice)
+  parseAll(configured ? text.c_str() : DEFAULTS);  // never configured: the defaults (an empty list is a choice)
 }
 
 inline void save() {
   Preferences prefs;
   if (!prefs.begin("dashboard", false)) return;
   prefs.putString("clocks", format());
+  prefs.putUChar("clockStyle", style);
   prefs.end();
 }
 
