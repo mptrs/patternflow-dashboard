@@ -84,6 +84,16 @@ fi
 # Optional: install over Wi-Fi, the same way the panel's /update page does
 if [ "${1:-}" = "flash" ]; then
   DEV="${2:-patternflow.local}"
+  # The panel takes one upload at a time: two at once break each other off.
+  # Wait while another one (a browser on /update, say) is still running.
+  for i in $(seq 1 30); do
+    st=$(curl -s --max-time 5 "http://$DEV/update/status" || true)
+    [ -z "$st" ] && { echo "$DEV does not answer: is it on the network? Try its IP address"; exit 1; }
+    echo "$st" | grep -q '"busy":true' || break
+    [ "$i" = 30 ] && { echo "another update is still running on $DEV: try again when it is done"; exit 1; }
+    echo "another update is running on $DEV, waiting ..."
+    sleep 5
+  done
   echo "installing on $DEV ..."
   # Patternflow only takes an update once it is armed on the device: hold K2 for NETWORK, turn K4 to UPDATE
   curl -sS --max-time 240 -T "$OUT" "http://$DEV/update?size=$(wc -c < "$OUT" | tr -d ' ')" || {
