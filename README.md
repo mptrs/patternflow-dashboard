@@ -35,9 +35,9 @@ Cells fade in when they are born, shift color as they age and leave a trail when
 
 ## Dashboard
 
-<p align="center"><img src="docs/dashboard-screens.png" alt="The dashboard screens, portrait above and landscape below: clock with moon, next days, next hours, weather now, and the world clocks as a departures board and as day and night bands" width="100%"></p>
+<p align="center"><img src="docs/dashboard-screens.png" alt="The dashboard screens, portrait above and landscape below: clock with moon, next days with temperature bars, a chart of the next 12 hours, weather now, and world clocks with day and night bands" width="100%"></p>
 
-Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, the next hours (now, +3, +6, +9), the next four days and world clocks (10 s each). The world clocks come as a split-flap departures board whose digits flip over, as a band of 24 hours per city showing day and night there, or both in turn (set on the settings page). A GIF plays after every screen, if you have uploaded any (always at least one full loop, and at least 10 s). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
+Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: clock with moon phase and sunrise/sunset (20 s), weather now, a chart of the next 12 hours (temperature line, an icon every 4 hours, rain bars), the next four days (each with a bar from its low to its high, on one scale) and world clocks (10 s each). Each world clock shows the time there and a band of 24 hours with day and night, marked at now. A GIF plays after every screen, if you have uploaded any (always at least one full loop, and at least 10 s). Every screen has a portrait layout (Patternflow's usual mounting) and a landscape one.
 
 | Knob | Turn | Press |
 |---|---|---|
@@ -47,7 +47,7 @@ Pick **Dashboard** in the K4 pattern browser. It rotates through five screens: c
 
 **Set your location** at `http://patternflow.local/dashboard`: type a city, pick it from the list. The browser looks the place up; the panel only stores its coordinates, in its own settings space. Weather comes from [Open-Meteo](https://open-meteo.com/) (free, no API key) every 15 minutes. The fetch runs on the ESP32's second core, so the panel never stutters while it loads.
 
-The weather icons are drawn from shapes rather than bitmaps, so they stay sharp at 64, 32 and 12 pixels. The home timezone is Central European Time with daylight saving (`DASH_TZ` in `feature/dashboard/dashboard_config.h`).
+The weather icons are drawn from shapes rather than bitmaps, so they stay sharp at any size. Text is set in DashBold7, a pixel font drawn for this panel with strokes two LEDs wide (`tools/font/bold7.txt`, made into a header by `tools/font/make_font.py`). The home timezone is Central European Time with daylight saving (`DASH_TZ` in `feature/dashboard/dashboard_config.h`).
 
 ### World clocks
 

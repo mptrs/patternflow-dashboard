@@ -7,6 +7,7 @@
 #include "../../src/core_canvas.h"
 #include "../../src/fonts/MatrixLight6.h"
 #include "../../src/fonts/MatrixLight8X.h"
+#include "dash_font_bold.h"
 
 namespace DashGfx {
 
@@ -20,7 +21,11 @@ constexpr RGB BLACK{0, 0, 0}, WHITE{255, 255, 255}, GREY{185, 185, 195}, DIM{45,
 constexpr RGB YELLOW{255, 200, 40}, ORANGE{255, 120, 30}, LIGHTBLUE{90, 170, 255};
 constexpr RGB BLUE{40, 110, 230}, CYAN{0, 210, 210}, MOONSHADE{176, 164, 136};
 
-const GFXfont* const SMALL = &MatrixLight6;
+// SMALL is the dashboard's own bold font (2-LED strokes, 7 rows); THIN is
+// Patternflow's 1-pixel font, for text too long for SMALL; LARGE is scaled up
+// for the big numbers.
+const GFXfont* const SMALL = &DashBold7;
+const GFXfont* const THIN = &MatrixLight6;
 const GFXfont* const LARGE = &MatrixLight8X;
 
 // Orientation: 0 landscape, 1 portrait, 2 landscape upside down, 3 portrait upside down
@@ -36,11 +41,8 @@ inline void begin(int orientation) {
   PFCanvas::clear();
 }
 
-// Rows outside clipTop..clipBottom-1 are not drawn (the split-flap animation draws half glyphs).
-inline int clipTop = 0, clipBottom = 1 << 14;
-
 inline void px(int x, int y, RGB c) {
-  if ((unsigned)x >= (unsigned)W || (unsigned)y >= (unsigned)H || y < clipTop || y >= clipBottom) return;
+  if ((unsigned)x >= (unsigned)W || (unsigned)y >= (unsigned)H) return;
   if (flipped) {
     x = W - 1 - x;
     y = H - 1 - y;

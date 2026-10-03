@@ -33,19 +33,6 @@ int main(int argc, char** argv) {
       }
       Dashboard::screen = s;
       const std::string tail = o ? "-portrait.ppm" : "-landscape.ppm";
-      if (s == Dashboard::WORLD) {  // both looks, and the board in the middle of a flip
-        DashClocks::style = DashClocks::BANDS;
-        Dashboard::draw();
-        save(std::string(argv[2]) + "/world-bands" + tail);
-        DashClocks::style = DashClocks::BOARD;
-        Dashboard::draw();
-        save(std::string(argv[2]) + "/world-board" + tail);
-        Dashboard::flapShown[0][3] = Dashboard::flapShown[0][3] == '0' ? '5' : '0';
-        Dashboard::flapShown[0][4] = '9';
-        Dashboard::draw();
-        save(std::string(argv[2]) + "/world-flip" + tail);
-        continue;
-      }
       Dashboard::draw();
       save(std::string(argv[2]) + "/" + names[s] + tail);
     }

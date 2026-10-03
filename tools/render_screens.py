@@ -55,6 +55,10 @@ def main():
     pics = []
     for p in frames:
         w, h, px = ppm(p)
+        lit = [(i % w, i // w) for i in range(w * h) if any(px[i * 3:i * 3 + 3])]
+        if lit:  # the margins, to keep every screen clear of the edges
+            xs, ys = [x for x, _ in lit], [y for _, y in lit]
+            print(f"{p.stem:20s} margins: top {min(ys)}, bottom {h - 1 - max(ys)}, left {min(xs)}, right {w - 1 - max(xs)}")
         img = Image.new("RGB", (w * S, h * S), (14, 14, 14))
         d = ImageDraw.Draw(img)
         for y in range(h):
