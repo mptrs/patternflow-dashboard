@@ -82,6 +82,7 @@ button.del:hover{border-color:var(--led);color:var(--led)}
 html.uploading .controls section:not(#gifsec),html.uploading #gifs,html.uploading #uf,html.uploading #drop,html.uploading #opts .row{opacity:.4;pointer-events:none}
 .qbar{height:2px;background:var(--rule-soft);margin-top:8px}
 .qbar i{display:block;height:100%;width:0;background:var(--led);transition:width .2s}
+canvas.thumb{width:32px;height:64px;flex:none;background:#000;border-radius:2px;image-rendering:pixelated;box-shadow:0 0 0 1px var(--rule)}
 .drop{display:block;border:1px dashed var(--rule);border-radius:3px;padding:22px 18px;text-align:center;
 background:rgba(255,255,255,.02);transition:border-color .15s,background .15s;cursor:pointer}
 .drop.over{border-color:var(--led);background:rgba(255,92,46,.06)}
@@ -232,6 +233,7 @@ function fill(s){
   if(renaming)return;  // not while a name is being edited
   const list=$('gifs');list.innerHTML='';
   for(const g of s.gifs){const li=document.createElement('li'),n=document.createElement('span'),b=document.createElement('button'),rn=document.createElement('button');
+    li.append(thumbOf(g));
     n.className='nm';n.textContent=g;b.className='del';b.textContent='Delete';
     rn.className='del';rn.textContent='Rename';rn.onclick=()=>renameRow(li,g);
     b.onclick=()=>{if(!confirm('Delete '+g+' from the panel?'))return;li.style.opacity=.3;
@@ -386,7 +388,7 @@ function decodeGif(buf){const b=new Uint8Array(buf);if(b[0]!==71||b[1]!==73||b[2
  return{W,H,frames};}
 
 // ── convert to clips: scale to 64x128 and 128x64, map to the 6x7x6 palette
-const G7=[0,43,85,128,170,213,255];
+var G7=[0,43,85,128,170,213,255];
 function convert(gif,tw,th,fit,sharp,split){let fr=gif.frames;const step=Math.ceil(fr.length/120);
  // split: a wide GIF becomes its left half above its right half (half as wide, twice as tall)
  const half=Math.floor(gif.W/2),SW=split?half:gif.W,SH=split?gif.H*2:gif.H;
@@ -424,6 +426,25 @@ async function pick(f){if(!f)return;
  $('opts').hidden=false;$('pv-empty').hidden=true;document.documentElement.classList.add('has-gif');$('pp').hidden=$('pl').hidden=false;$('split').classList.toggle('on',gif.W>=1.6*gif.H);
  $('name').value=f.name.replace(/\.gif$/i,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);
  PF.dirty=true;preview();}
+// A still from the middle of each GIF, as the panel shows it. Fetched one at a
+// time (the panel serves one request at a time) and kept, so a list refresh
+// costs nothing.
+const thumbs=new Map(),thumbQueue=[];let thumbBusy=false;
+function paint(c,ix){const img=new ImageData(64,128);
+  for(let j=0;j<64*128;j++){const v=ix[j];if(v>=252)continue;img.data[j*4]=Math.floor(v/42)*51;img.data[j*4+1]=G7[Math.floor(v/6)%7];img.data[j*4+2]=v%6*51;img.data[j*4+3]=255;}
+  c.getContext('2d').putImageData(img,0,0);}
+function thumbOf(name){const c=document.createElement('canvas');c.width=64;c.height=128;c.className='thumb';c.dataset.name=name;
+  if(thumbs.has(name))paint(c,thumbs.get(name));
+  else{thumbQueue.push([name,c]);nextThumb();}
+  return c;}
+function nextThumb(){if(thumbBusy||uploading||!thumbQueue.length)return;const[name,c]=thumbQueue.shift();
+  if(thumbs.has(name)){paint(c,thumbs.get(name));return nextThumb();}
+  thumbBusy=true;
+  fetch('/api/dashboard/gif/thumb?name='+name).then(r=>r.ok?r.arrayBuffer():null).then(b=>{
+    if(b&&b.byteLength===64*128){const ix=new Uint8Array(b);thumbs.set(name,ix);
+      document.querySelectorAll('canvas.thumb').forEach(x=>{if(x.dataset.name===name)paint(x,ix)});paint(c,ix);}
+  }).catch(()=>{}).then(()=>{thumbBusy=false;setTimeout(nextThumb,100)});}
+
 // Rename in place: the row becomes a field; Enter saves, Escape cancels
 const slug=t=>t.toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);
 let renaming=false;

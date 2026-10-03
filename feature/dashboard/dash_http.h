@@ -9,6 +9,7 @@
 #include "../../src/core_loop_sync.h"
 #include "../../src/core_patterns_http.h"
 #include "../../src/core_send.h"
+#include "../../src/core_mem.h"
 #include "dash_accel.h"
 #include "dash_clocks.h"
 #include "dash_gifs.h"
@@ -214,6 +215,42 @@ inline void handleDelete() {
   sendJson(200, "{\"ok\":true}");
 }
 
+// One frame from the middle of a GIF's portrait clip (64x128 palette indices,
+// 8 KB), for the list on the settings page. Not the whole clip: the panel's
+// link is slow and serves one request at a time.
+inline void handleThumb() {
+  const String name = server().arg("name");
+  if (!DashGifs::validName(name.c_str())) {
+    sendJson(400, "{\"error\":\"bad name\"}");
+    return;
+  }
+  char p[64];
+  DashGifs::path(p, sizeof p, name.c_str(), true);
+  constexpr size_t FRAME = 64 * 128;
+  uint8_t* buf = (uint8_t*)PFMem::alloc(FRAME);
+  bool ok = false;
+  if (buf) {
+    File f = FFat.open(p, FILE_READ);
+    uint8_t head[12];
+    if (f && f.read(head, 12) == 12 && memcmp(head, "DGF1", 4) == 0 && (head[4] | head[5] << 8) == 64 &&
+        (head[6] | head[7] << 8) == 128) {
+      const int frames = head[8] | head[9] << 8;
+      ok = frames >= 1 && f.seek(12 + 2 * frames + (uint32_t)(frames / 2) * FRAME) && f.read(buf, FRAME) == FRAME;
+    }
+    if (f) f.close();
+  }
+  if (!ok) {
+    free(buf);
+    sendJson(404, "{\"error\":\"no such GIF\"}");
+    return;
+  }
+  server().sendHeader("Cache-Control", "no-store");
+  server().setContentLength(FRAME);
+  server().send(200, "application/octet-stream", "");
+  PFSend::drain(server(), buf, FRAME);
+  free(buf);
+}
+
 inline void handleRename() {
   const String from = server().arg("name"), to = server().arg("to");
   if (!DashGifs::validName(from.c_str()) || !DashGifs::validName(to.c_str())) {
@@ -274,6 +311,7 @@ inline void registerRoutes() {
   server().on("/api/dashboard/gif", HTTP_POST, handleUploadDone, handleUpload);
   server().on("/api/dashboard/gif/delete", HTTP_POST, handleDelete);
   server().on("/api/dashboard/gif/rename", HTTP_POST, handleRename);
+  server().on("/api/dashboard/gif/thumb", HTTP_GET, handleThumb);
 }
 
 }  // namespace DashHttp

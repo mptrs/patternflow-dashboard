@@ -62,6 +62,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(STATUS))
         if url.path == "/api/dashboard":
             return self.send(200, json.dumps({**state, "updated": 0, "error": "", "free": 8 * 1048576, "gifs": clips()}))
+        if url.path == "/api/dashboard/gif/thumb":
+            f = STORE / f"{parse_qs(url.query).get('name', [''])[0]}.p.dgf"
+            if f.exists():
+                d = f.read_bytes()
+                n = int.from_bytes(d[8:10], "little")
+                start = 12 + 2 * n + (n // 2) * 8192
+                return self.send(200, d[start:start + 8192], "application/octet-stream")
+            return self.send(404, '{"error":"no such GIF"}')
         if url.path == "/api/dashboard/orientation":
             return self.send(200, json.dumps(accel if accel["present"] else {**accel, "sensed": -1, "g": [0, 0, 0]}))
         if url.path.startswith("/test/"):  # serves files for automated tests
