@@ -192,7 +192,7 @@ static void drawHourly() {
     snprintf(temp, sizeof temp, "%d", (int)lroundf(w.hTemp[h]));
     snprintf(rain, sizeof rain, "%d%%", w.hRain[h]);
     block(i, hourIcons[i].get(DashIcons::fromWmo(w.hCode[h], w.hDay[h]), 24, alloc), label, temp,
-          tempColor(w.hTemp[h]), rain, w.hRain[h] >= 10 ? LIGHTBLUE : DIM);
+          tempColor(w.hTemp[h]), rain, w.hRain[h] >= 10 ? LIGHTBLUE : GREY);
   }
 }
 

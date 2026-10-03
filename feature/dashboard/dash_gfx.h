@@ -14,7 +14,9 @@ struct RGB {
   uint8_t r, g, b;
 };
 
-constexpr RGB BLACK{0, 0, 0}, WHITE{240, 240, 240}, GREY{125, 125, 135}, DIM{45, 45, 55};
+// GREY is for labels: bright enough to read on a panel (thin 1-pixel text at
+// half brightness looked faint), still a step below WHITE for the values.
+constexpr RGB BLACK{0, 0, 0}, WHITE{255, 255, 255}, GREY{185, 185, 195}, DIM{45, 45, 55};
 constexpr RGB YELLOW{255, 200, 40}, ORANGE{255, 120, 30}, LIGHTBLUE{90, 170, 255};
 constexpr RGB BLUE{40, 110, 230}, CYAN{0, 210, 210}, MOONSHADE{176, 164, 136};
 
