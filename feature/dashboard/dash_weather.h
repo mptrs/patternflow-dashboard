@@ -10,6 +10,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <esp_heap_caps.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -194,25 +195,36 @@ inline bool parse(const char* body, Data& d) {
 }
 
 // ---------------------------------------------------------------- fetching
-inline void buildUrl(char* out, size_t n) {
+inline void buildUrl(char* out, size_t n, bool secure) {
   snprintf(out, n,
-           "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto"
+           "%s://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto"
            "&forecast_days=%d&forecast_hours=%d"
            "&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m"
            "&hourly=temperature_2m,precipitation_probability,weather_code,is_day"
            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
-           lat, lon, DAYS, HOURS);
+           secure ? "https" : "http", lat, lon, DAYS, HOURS);
 }
 
-inline void fetchTask(void*) {
+// HTTPS needs about 40 KB of internal RAM for TLS, and the panel's DMA buffers
+// leave less than that on most boards. Open-Meteo answers plain HTTP too (the
+// request carries only a city's coordinates), so TLS is used only when it fits.
+constexpr size_t TLS_FREE = 56 * 1024, TLS_LARGEST = 24 * 1024;
+inline bool tlsFits() {
+  return heap_caps_get_free_size(MALLOC_CAP_INTERNAL) >= TLS_FREE &&
+         heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) >= TLS_LARGEST;
+}
+
+inline void fetchTask(void* arg) {
+  const bool secure = arg != nullptr;
   char url[512];
-  buildUrl(url, sizeof url);
-  WiFiClientSecure client;
-  client.setInsecure();  // same as Patternflow's own weather fetch: the board has no CA store
+  buildUrl(url, sizeof url, secure);
+  WiFiClientSecure tls;
+  WiFiClient plain;
+  if (secure) tls.setInsecure();  // same as Patternflow's own weather fetch: the board has no CA store
   HTTPClient http;
   http.setTimeout(8000);
   bool ok = false;
-  if (http.begin(client, url)) {
+  if (secure ? http.begin(tls, url) : http.begin(plain, url)) {
     const int code = http.GET();
     if (code == HTTP_CODE_OK) {
       const String body = http.getString();
@@ -229,7 +241,7 @@ inline void fetchTask(void*) {
     lastError[0] = 0;
     incomingReady = true;
   }
-  Serial.printf("[DASH] weather %s%s\n", ok ? "updated" : "failed: ", ok ? "" : lastError);
+  Serial.printf("[DASH] weather (%s) %s%s\n", secure ? "https" : "http", ok ? "updated" : "failed: ", ok ? "" : lastError);
   fetching = false;
   vTaskDelete(nullptr);
 }
@@ -248,7 +260,9 @@ inline void tick() {
   if ((int32_t)(millis() - nextFetchMs) < 0) return;
   fetching = true;
   nextFetchMs = millis() + DashConfig::WEATHER_RETRY_MS;  // if this attempt fails
-  if (xTaskCreatePinnedToCore(fetchTask, "dash_weather", 12288, nullptr, 1, nullptr, 0) != pdPASS) {
+  const bool secure = tlsFits();
+  if (xTaskCreatePinnedToCore(fetchTask, "dash_weather", secure ? 12288 : 8192, secure ? (void*)1 : nullptr, 1,
+                              nullptr, 0) != pdPASS) {
     fetching = false;
     snprintf(lastError, sizeof lastError, "no memory for the fetch task");
   }
