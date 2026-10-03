@@ -439,7 +439,7 @@ function fromUrl(){
   say('fetching…','info',$('umsg'));
   PF.busy($('ugo'),fetch(link.url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.blob();})
     .then(b=>pick(new File([b],link.name+'.gif')))
-    .catch(()=>say('could not fetch it: the site may not allow it. On the site, right-click the GIF, choose "Copy image address" and paste that, or download it and drop the file here.','err',$('umsg'))));
+    .catch(()=>say(/gifer\.com$/.test(new URL(link.url).hostname)?'Gifer does not let other pages load its GIFs. Click Download on Gifer and drop the file here.':'could not fetch it: the site may not allow it. On the site, right-click the GIF, choose "Copy image address" and paste that, or download it and drop the file here.','err',$('umsg'))));
 }
 $('uf').onsubmit=e=>{e.preventDefault();fromUrl();};
 for(const id of['fit','scale'])$(id).addEventListener('click',e=>{const b=e.target.closest('.seg');if(!b)return;

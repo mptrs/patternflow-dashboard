@@ -208,7 +208,7 @@ inline void buildUrl(char* out, size_t n, bool secure) {
 // HTTPS needs about 40 KB of internal RAM for TLS, and the panel's DMA buffers
 // leave less than that on most boards. Open-Meteo answers plain HTTP too (the
 // request carries only a city's coordinates), so TLS is used only when it fits.
-constexpr size_t TLS_FREE = 56 * 1024, TLS_LARGEST = 24 * 1024;
+constexpr size_t TLS_FREE = 96 * 1024, TLS_LARGEST = 48 * 1024;  // 61/43 KB was measured to fail
 inline bool tlsFits() {
   return heap_caps_get_free_size(MALLOC_CAP_INTERNAL) >= TLS_FREE &&
          heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) >= TLS_LARGEST;

@@ -31,6 +31,7 @@ namespace PFFeatureDashboard {
 
 inline void setup() {
   DashWeather::loadSettings();
+  DashWeather::requestFetch(30000);  // not before Patternflow has settled (see onNetwork)
   DashState::load();
   DashNight::load();
   DashClocks::load();
