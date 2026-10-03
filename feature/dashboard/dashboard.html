@@ -167,7 +167,10 @@ html[data-theme=light] select,html[data-theme=light] input{color-scheme:light}
       <h2>GIFs</h2>
       <p class="note bad" id="nofs" hidden>The panel's storage is not formatted yet, so GIFs cannot be saved. Format it once on the <a href="/patterns">Patterns</a> page.</p>
       <label class="drop" id="drop"><input type="file" id="file" accept="image/gif">
-        <p>Drop a <b>.gif</b> here, or click to choose</p></label>
+        <p>Drop a <b>.gif</b> here (a file, or a GIF dragged from another tab), or click to choose</p></label>
+      <form class="row" id="uf" autocomplete="off" style="margin-top:8px"><label for="url">Or a link</label>
+        <input id="url" type="text" class="grow" placeholder="giphy.com/gifs/… or a link to a .gif"><button class="go" id="ugo">Fetch</button></form>
+      <div class="msg" id="umsg"></div>
       <div id="opts" hidden>
         <div class="row" style="margin-top:10px"><label>Fit</label>
           <div class="segs" id="fit"><button type="button" class="seg on" data-v="contain">Whole GIF</button><button type="button" class="seg" data-v="cover">Fill, crop</button></div></div>
@@ -401,7 +404,8 @@ function preview(){if(!gif)return;
    $(k).getContext('2d').putImageData(img,0,0);}
   anim=setTimeout(tick,clips.p.frames[i%clips.p.frames.length].delay);i++;};tick();}
 async function pick(f){if(!f)return;
- try{gif=decodeGif(await f.arrayBuffer());}catch(e){say('could not read this GIF','err',$('gmsg'));return;}
+ try{gif=decodeGif(await f.arrayBuffer());}catch(e){say('could not read this GIF','err',$('umsg'));return;}
+ say('','info',$('umsg'));
  $('opts').hidden=false;$('pv-empty').hidden=true;document.documentElement.classList.add('has-gif');$('pp').hidden=$('pl').hidden=false;$('split').classList.toggle('on',gif.W>=1.6*gif.H);
  $('name').value=f.name.replace(/\.gif$/i,'').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'').slice(0,24);
  PF.dirty=true;preview();}
@@ -409,7 +413,30 @@ $('file').onchange=()=>pick($('file').files[0]);
 const drop=$('drop');
 drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over')});
 drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
-drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');pick(e.dataTransfer.files[0])});
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');
+  const link=e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain');
+  if(e.dataTransfer.files.length)pick(e.dataTransfer.files[0]);else if(link){$('url').value=link.split('\n')[0].trim();fromUrl();}});
+
+// ── GIFs from a link: the browser fetches them (Giphy, Tenor and Imgur allow that)
+// A Giphy page (giphy.com/gifs/nyan-cat-sCbS2qKJjLpEc) becomes its GIF (i.giphy.com/<id>.gif).
+function gifLink(text){
+  let u;try{u=new URL(/^https?:\/\//i.test(text)?text:'https://'+text);}catch(e){return null;}
+  const giphy=u.hostname.replace(/^www\./,'')==='giphy.com'&&u.pathname.match(/^\/(?:gifs|stickers|embed)\/(?:([\w-]*)-)?([A-Za-z0-9]+)\/?$/);
+  if(giphy)return{url:`https://i.giphy.com/${giphy[2]}.gif`,name:giphy[1]||giphy[2]};
+  const media=/(^|\.)giphy\.com$/.test(u.hostname)&&u.pathname.match(/^\/media\/(?:v1\.[^/]+\/)?([A-Za-z0-9]+)\//);
+  if(media)return{url:`https://i.giphy.com/${media[1]}.gif`,name:media[1]};
+  const last=u.pathname.split('/').filter(Boolean).pop()||'gif';
+  return{url:u.href,name:last.replace(/\.gif$/i,'')};
+}
+function fromUrl(){
+  const link=gifLink($('url').value.trim());
+  if(!link){say('that is not a link','err',$('umsg'));return;}
+  say('fetching…','info',$('umsg'));
+  PF.busy($('ugo'),fetch(link.url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.blob();})
+    .then(b=>pick(new File([b],link.name+'.gif')))
+    .catch(()=>say('could not fetch it: the site may not allow it. On the site, right-click the GIF, choose "Copy image address" and paste that, or download it and drop the file here.','err',$('umsg'))));
+}
+$('uf').onsubmit=e=>{e.preventDefault();fromUrl();};
 for(const id of['fit','scale'])$(id).addEventListener('click',e=>{const b=e.target.closest('.seg');if(!b)return;
   $(id).querySelectorAll('.seg').forEach(x=>x.classList.toggle('on',x===b));preview();});
 $('split').onclick=()=>{$('split').classList.toggle('on');preview()};
