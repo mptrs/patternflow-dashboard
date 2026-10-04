@@ -1,9 +1,10 @@
 # Patternflow Dashboard
 
-A community edition of [Patternflow](https://github.com/engmung/Patternflow), the open-source LED synthesizer. It adds two things and changes nothing else:
+A community edition of [Patternflow](https://github.com/engmung/Patternflow), the open-source LED synthesizer. It adds these and changes nothing else:
 
 - **Game of Life**: a pattern you play with the four knobs. Install it like any other pattern.
 - **Dashboard**: a clock with moon phase, weather now, the next hours, the next days and world clocks, with your own GIFs in between. It shows up as an extra entry in the K4 pattern browser.
+- **GIFs**: only your GIFs, one after another, with the knobs to flip through them, hold one, and set the speed. Another entry in the K4 pattern browser.
 - **Night mode**: the whole panel sleeps at night (default 22:00–08:00), whatever pattern is running.
 
 <p align="center"><img src="docs/game-of-life.gif" alt="Game of Life on a 128×64 Patternflow panel: fading in, a mirrored seed, Day & Night, a world dissolving and methuselahs growing" width="512"></p>
@@ -58,6 +59,19 @@ The panel has no time zone database, so the page derives each city's daylight sa
 ### GIFs
 
 Upload them on the same page, `http://patternflow.local/dashboard`. Pick a GIF file, drag one in from another tab, or paste a link: a Giphy page (`giphy.com/gifs/…`) works as it is, and for other sites the GIF's own address ("Copy image address"). The browser does the work: it decodes it, shows a live preview in portrait and landscape, and converts it. You choose between *whole GIF* (black bars) or *fill* (cropped), and sharp (pixel art) or smooth scaling. For wide GIFs (two characters side by side, say), *split* puts the left half above the right half in portrait, so they stay big. It is switched on automatically for GIFs at least 1.6 times as wide as they are tall. The panel stores a portrait and a landscape version, in a 252-colour palette at one byte per pixel (8 KB per frame). While another screen shows, it reads the next GIF into PSRAM in small steps and then plays it from there, so playback never holds up the flash or Wi-Fi. GIFs with more than 120 frames are thinned out so the whole animation still fits. Delete them from the list on the same page.
+
+### Only GIFs
+
+Pick **GIFs** in the K4 pattern browser to see just your GIFs, without the dashboard screens. They play in the order of the list, each to the end of a loop.
+
+| Knob | Turn | Press |
+|---|---|---|
+| **K1** | previous / next GIF | hold this GIF: it loops until you press again |
+| **K2** | orientation, as on the dashboard | show the GIF's name |
+| **K3** | speed: ¼× to 4× | back to normal speed |
+| **K4** | how long each GIF plays: one loop, 10 s, 30 s, 1 min or 5 min | back to the pattern you had before |
+
+Every change shows on the panel for two seconds, and hold, speed and length are remembered. The next GIF is read into memory while the current one plays, so turning K1 forward is instant; turning back takes a moment to read that GIF, while the current one plays on.
 
 ### Automatic rotation (optional accelerometer)
 
@@ -123,7 +137,7 @@ Releases are built by GitHub Actions: push a tag such as `v0.2.0` and the firmwa
 
 | Path | What it is |
 |---|---|
-| `feature/dashboard/` | the Patternflow feature: copied into `firmware/patternflow/features/` at build time. `preset_dashboard.h` has the screens, `dash_weather.h` the Open-Meteo fetch, `dash_icons.h` the icons, `dash_gifs.h` the GIF player, `dash_night.h` night mode, `dash_accel.h` the accelerometer, `dash_http.h` the settings page (including the in-browser GIF decoder) |
+| `feature/dashboard/` | the Patternflow feature: copied into `firmware/patternflow/features/` at build time. `preset_dashboard.h` has the screens, `preset_gifs.h` the GIFs pattern, `dash_weather.h` the Open-Meteo fetch, `dash_icons.h` the icons, `dash_gifs.h` the GIF player, `dash_night.h` night mode, `dash_accel.h` the accelerometer, `dash_http.h` the settings page (including the in-browser GIF decoder) |
 | `tools/mock_panel.py` | a pretend panel for trying the settings page |
 | `edition/` | the edition's two files: which features it carries, and its name and version |
 | `patterns/` | patterns, each as a C++ header (for the panel) and a JavaScript twin (for the Live Editor) |

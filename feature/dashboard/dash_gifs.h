@@ -1,4 +1,4 @@
-// Patternflow Dashboard - GIF clips between the dashboard screens.
+// Patternflow Dashboard - GIF clips, between the dashboard screens and in the GIFs pattern.
 //
 // The browser does all the GIF work (decode, scale, convert) on the settings
 // page and uploads two clips per GIF: one for portrait (64x128) and one for
@@ -150,6 +150,23 @@ inline void prepare(bool portrait) {
   c.portrait = portrait;
   loadState = 1;
   if (xTaskCreatePinnedToCore(loadTask, "dash_gif", 4096, nullptr, 1, nullptr, 0) != pdPASS) loadState = 3;
+}
+
+// For the GIFs pattern, which picks its own clip: have names[index] ready for
+// this orientation. A clip read for another one is dropped; one that is still
+// being read is let finish first. A failed read is left for the caller to skip.
+inline void prepareClip(int index, bool portrait) {
+  if (loadState == 1 || loadState == 3 || !any()) return;
+  index = (index % count + count) % count;
+  if (loadState == 2 && strcmp(loaded().name, names[index]) != 0) loadState = 0;
+  nextClip = index;
+  prepare(portrait);
+}
+
+inline bool ready(int index, bool portrait) {
+  if (loadState != 2 || !any()) return false;
+  index = (index % count + count) % count;
+  return loaded().portrait == portrait && strcmp(loaded().name, names[index]) == 0;
 }
 
 // After an upload or delete: a clip read before it may be stale.
