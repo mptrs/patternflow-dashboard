@@ -9,7 +9,7 @@ A community edition of [Patternflow](https://github.com/engmung/Patternflow), th
 
 <p align="center"><img src="docs/game-of-life.gif" alt="Game of Life on a 128×64 Patternflow panel: fading in, a mirrored seed, Day & Night, a world dissolving and methuselahs growing" width="512"></p>
 
-> **Status:** early. Everything builds and passes its tests on a computer, with real weather data. Nothing has run on real Patternflow hardware yet.
+> **Status:** early, but it runs on a real Patternflow panel.
 
 ## How it relates to Patternflow
 
