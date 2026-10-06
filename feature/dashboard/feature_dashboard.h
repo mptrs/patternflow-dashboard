@@ -6,11 +6,12 @@
 //   - onNetwork:   the settings page /dashboard, and a first weather fetch
 //   - loop:        weather refresh (fetched on core 0, never blocks a frame)
 //                  and remembering which pattern ran before the dashboard
-//   - takePattern: K4 click on the dashboard goes back to that pattern
+//   - takePattern: K4 click on the dashboard (or the GIFs) goes back to that pattern
 //   - night mode:  requestSleep / onSleep / observeFrame (see dash_night.h)
 //   - rotation:    follows the optional accelerometer (dash_accel.h); composeFrame
 //                  turns Patternflow's own patterns 180 degrees when upside down
-// The screens themselves are the "Dashboard" pattern in preset_dashboard.h.
+// The screens themselves are the "Dashboard" pattern in preset_dashboard.h, and
+// the GIFs on their own the "GIFs" pattern in preset_gifs.h.
 //
 // License: MIT
 // ═══════════════════════════════════════════════════════════
@@ -54,7 +55,8 @@ inline void onNetwork() {
 inline void loop(const PFFeatureFrame& frame) {
   DashWeather::tick();
   DashNight::tick();
-  DashState::dashboardShowing = frame.patternName && strcmp(frame.patternName, "Dashboard") == 0;
+  DashState::dashboardShowing = frame.patternName && (strcmp(frame.patternName, "Dashboard") == 0 ||
+                                                      strcmp(frame.patternName, "GIFs") == 0);
   if (frame.patternName && !DashState::dashboardShowing && frame.patternIndex >= 0) {
     DashState::previousPattern = frame.patternIndex;
   }
@@ -67,7 +69,7 @@ inline void loop(const PFFeatureFrame& frame) {
 }
 
 // Patternflow's own patterns are drawn for one fixed way up. When the panel
-// hangs upside down, turn the whole frame 180 degrees (the dashboard turns itself).
+// hangs upside down, turn the whole frame 180 degrees (the dashboard and the GIFs turn themselves).
 inline const uint8_t* composeFrame(const uint8_t* frame, int w, int h) {
   if (!DashAccel::flipPatterns || DashState::dashboardShowing || DashState::orientation < 2) return nullptr;
   static uint8_t* flipped = nullptr;
@@ -115,7 +117,7 @@ inline const PFFeature descriptor = {
     nullptr,       // drawOverlay
     "/dashboard",  // navPath - the console header link
     "Dashboard",   // navLabel
-    "Location for the weather, night mode, rotation, and the GIFs between the dashboard screens.",
+    "Location for the weather, night mode, rotation, and the GIFs for the dashboard and the GIFs pattern.",
     composeFrame,
 };
 
